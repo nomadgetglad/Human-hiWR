@@ -30,8 +30,8 @@ WORKFLOWS = {
 EXIT_STAGES = {"no_show", "cancelled", "remade", "rejected_qc"}
 
 
-def connect(path=":memory:"):
-    db = sqlite3.connect(path)
+def connect(path=":memory:", **sqlite_kwargs):
+    db = sqlite3.connect(path, **sqlite_kwargs)
     db.row_factory = sqlite3.Row
     db.execute("PRAGMA foreign_keys = ON")
     db.executescript(SCHEMA.read_text())
