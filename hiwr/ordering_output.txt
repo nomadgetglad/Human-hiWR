@@ -1,0 +1,27 @@
+1. REORDER LIST built ahead from predicted use (next 21 days) - drafts for chef_marco
+   PO #1 Sysco: order by 2026-11-20, total $969.08
+      UPC 0007470300201  beef patty    5 x 80 ct case     $540.00  order by 2026-11-22  (uses 52.8 each/day, 400 on hand, hits safety in 4 days)
+      UPC 0004088900030  cilantro      2 x 2 lb case       $16.00  order by 2026-11-20  (uses 5.7 oz/day, 30 on hand, hits safety in 2 days)
+      UPC 0074865200118  corn tortilla 3 x 360 ct case    $129.60  order by 2026-11-22  (uses 112.9 each/day, 900 on hand, hits safety in 4 days)
+      UPC 0007072300016  crema         4 x 8 x 16 oz       $76.80  order by 2026-11-20  (uses 37.6 oz/day, 100 on hand, hits safety in 0 days)
+      UPC 0001300000646  ketchup       2 x #10 can x 1     $11.40  order by 2026-11-25  (uses 23.8 oz/day, 250 on hand, hits safety in 7 days)
+      UPC 0004064000024  lettuce       2 x 24 ct case      $61.44  order by 2026-11-20  (uses 52.8 oz/day, 200 on hand, hits safety in 1 days)
+      UPC 0004004800048  lime          1 x 150 ct case     $30.00  order by 2026-12-01  (uses 4.7 each/day, 80 on hand, hits safety in 13 days)
+      UPC 0004800000128  mayo          3 x 1 gal           $23.04  order by 2026-11-21  (uses 47.5 oz/day, 300 on hand, hits safety in 3 days)
+      UPC 0004670000025  pickle        1 x 1 gal           $12.80  order by 2026-11-29  (uses 7.9 oz/day, 120 on hand, hits safety in 11 days)
+      UPC 0004068200071  roma tomato   1 x 25 lb case      $36.00  order by 2026-12-01  (uses 69.8 oz/day, 1200 on hand, hits safety in 13 days)
+      UPC 0004066300012  white onion   1 x 50 lb sack      $32.00  order by 2026-11-27  (uses 22.6 oz/day, 300 on hand, hits safety in 9 days)
+   PO #2 Pine St Bakery: order by 2026-11-20, total $259.20
+      UPC 0061032700005  brioche bun   12 x 4 dz           $259.20  order by 2026-11-20  (uses 52.8 each/day, 60 on hand, hits safety in 0 days)
+   PO #3 Harbor Seafood: order by 2026-11-20, total $1,056.00   NOTE: open tickets SHP-0001
+      UPC 0085012300045  white fish    12 x 10 lb case   $1,056.00  order by 2026-11-20  (uses 188.1 oz/day, 300 on hand, hits safety in 0 days)
+   cook_luis sends a PO: BLOCKED: cook_luis can't send purchase orders (needs Manager level)
+   chef_marco reviewed and sent PO #1
+
+2. BACK STOCK - more than will be used in time
+   roma tomato: 1200 oz on hand, uses 69.8/day, expires in 6 days, 621.2 oz will be left
+      - Skip or cut the next reorder of roma tomato (already left off the PO drafts)
+      - Stew special: feature Tomato salad (uses 6 oz each); about 18 extra a day for 6 days uses the excess. Food cost 7.1% so a $2 discount still leaves margin
+      - Transfer 300 oz to Downtown location, which is short
+      - Donate the excess to a food bank by 2026-11-25 (good-faith food donations are generally protected under the federal Bill Emerson Good Samaritan Act)
+   chef_marco picks: Tomato salad special this weekend, transfer 300 oz downtown, donate the rest Wed. Logged.

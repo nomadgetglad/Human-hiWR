@@ -1,0 +1,45 @@
+A. STAFF SECTION - Fri Dec 4, 2:05 PM, chef_marco
+   Tonight: 150 covers
+   cook       need 4 (150 covers / 40 per cook, minimum 2), on shift: cook_luis, cook_rosa, cook_dan, cook_ana  short 0
+   dishwasher need 2 (150 covers / 75 per dishwasher, minimum 1), on shift: dish_eve  short 1
+   Pressing:
+    - Tonight short 1 dishwasher - find same-night cover
+    - HR: cook_dan time off 2026-12-24 to 2026-12-26 (family travel)
+    - HR: dish_eve swap 2026-12-12 to 2026-12-12 (swap Sat with Ray)
+    - HR: cook_ana pay question (overtime on last check)
+
+   Find same-night dishwasher, 5-11 PM:
+    Tia Owens   30 months, reliability 100, language es
+    Marcus Bell 18 months, reliability 100, language en
+    Nina Park   4 months, reliability 100, language en
+   Texts sent to the top 3, held until 14:36. Answers:
+    Marcus Bell yes at 14:12 -> confirmed
+    Tia Owens   yes at 14:15 -> already filled, thanks
+    Nina Park   no at 14:20 -> noted
+   Filled by Marcus Bell.
+
+B. TEMP AGREEMENT #1: 7 prime-time shifts, $16/h, 5h minimum -> contract_dishwasher_temp.md
+   2026-12-04: 6.17h worked, pay $98.67
+   2026-12-05: 5.58h worked, pay $89.33
+              worker: late -> recorded
+   2026-12-11:  0.0h worked, pay $0.00, employer owes $80.00
+              employer: late cancel -> 5h call-in pay owed
+   2026-12-12:  3.5h worked, pay $56.00, employer owes $24.00
+              worker: left 150 min early with manager OK
+              employer: hours cut -> paid up to minimum hours
+   2026-12-18:  0.0h worked, pay $0.00
+              worker: no call no show -> written warning
+   2026-12-19: 6.03h worked, pay $96.53
+   2026-12-26: 5.13h worked, pay $82.13
+              worker: left early no notice -> written warning
+   Payroll entries: 6, total $526.66 + employer tax est. $40.29 (7.65%)
+   Status before approval: PENDING - requires double approval (0/2)
+   After manager_jo + accounting_sue: APPROVED (all 6)
+   Reliability: temp_marcus 60, employer 80
+   Check-in: OK
+
+C. FOREMAN - third shift welder, Mon-Thu 10 PM-6 AM, start Jan 4
+   READY  Rico Vance 72 months, {'aws_certified_welder': 'verified', 'osha_30': 'verified'}, $28.00/h (incl. $2.00 night differential)
+   NOT YET Joy Tran  needs one of osha_10/osha_30 (osha_10 unverified, osha_30 missing)
+   NOT YET Hal Burke aws_certified_welder expired 2026-12-31
+   NOT YET Kim Ott   available 2/4 nights
