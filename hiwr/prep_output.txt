@@ -1,0 +1,20 @@
+FRYER - prep screen for fried tortilla chips (Fri, 150 reservations vs usual 120)
+   [4:00 PM] chips sold today 140.0 oz (100% of forecast), good on hand 0.0, waste 4.0
+          expected next hour 18.0, next 3h 194.2, rest of night 493.6
+          -> FRY 1 batch(es) now (48 oz, 8 min), uses 60 corn tortilla; next batch about 6:32 PM
+   [5:00 PM] chips sold today 158.0 oz (100% of forecast), good on hand 34.0, waste 0.0
+          expected next hour 58.8, next 3h 303.1, rest of night 475.6
+          -> FRY 1 batch(es) now (48 oz, 8 min), uses 60 corn tortilla; next batch about 6:15 PM
+   ... 5-6 PM ran 45% busier than forecast (a big party ordered nachos for the table)
+   [6:00 PM] chips sold today 230.0 oz (106% of forecast), good on hand 10.0, waste 0.0
+          expected next hour 122.3, next 3h 353.2, rest of night 433.9
+          -> FRY 3 batch(es) now (48 oz, 8 min), uses 180 corn tortilla; next batch about 7:07 PM
+   [7:00 PM] chips sold today 364.0 oz (109% of forecast), good on hand 20.0, waste 0.0
+          expected next hour 134.8, next 3h 294.1, rest of night 318.0
+          -> FRY 3 batch(es) now (48 oz, 8 min), uses 180 corn tortilla; next batch about 8:05 PM
+   Corn tortillas left in Stew inventory: 540 (enough for 9 more batches)
+
+WELDER - station screen for cruz (quota 20 pipes this shift, 7 AM - 3 PM)
+   [11:00] done 7/20, pace 1.75/h, need 3.25/h -> behind: projected 14 of 20
+   [13:00] done 13/20, pace 2.17/h, need 3.5/h -> behind: projected 17 of 20
+   Behind at 11 AM shows on the foreman's board too; cruz sees only his own numbers.

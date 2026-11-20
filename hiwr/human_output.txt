@@ -1,0 +1,33 @@
+1. STAFFING for week of 2026-11-30 (DRAFT - a manager publishes it)
+   2026-11-30 cook   need 2  (60 covers / 40 per cook, minimum 2)  -> cook_ana, cook_luis  $216.00
+   2026-11-30 server need 3  (60 covers / 25 per server, minimum 1)  -> server_ben, server_mo, server_kim  $207.00
+   2026-11-30 maker  need 1  (1 units / 2 per maker)  -> maker_sol  $192.00
+   2026-12-01 cook   need 2  (66 covers / 40 per cook, minimum 2)  -> cook_dan, cook_luis  $210.00
+   2026-12-01 server need 3  (66 covers / 25 per server, minimum 1)  -> server_ben, server_mo, server_kim  $207.00
+   2026-12-01 maker  need 1  (2 units / 2 per maker)  -> maker_sol  $192.00
+   2026-12-02 cook   need 2  (78 covers / 40 per cook, minimum 2)  -> cook_ana, cook_rosa  $228.00
+   2026-12-02 server need 4  (78 covers / 25 per server, minimum 1)  -> server_ben, server_mo, server_kim, server_liz  $279.00
+   2026-12-02 maker  need 1  (2 units / 2 per maker)  -> maker_sol  $192.00
+   2026-12-03 cook   need 3  (90 covers / 40 per cook, minimum 2)  -> cook_dan, cook_luis, cook_rosa  $330.00
+   2026-12-03 server need 4  (90 covers / 25 per server, minimum 1)  -> server_ben, server_mo, server_kim, server_liz  $279.00
+   2026-12-03 maker  need 1  (1 units / 2 per maker)  -> maker_sol  $192.00
+   2026-12-04 cook   need 4  (150 covers / 40 per cook, minimum 2)  -> cook_dan, cook_ana, cook_rosa, cook_luis (OT 4h)  $474.00
+   2026-12-04 server need 6  (150 covers / 25 per server, minimum 1)  -> server_ben, server_mo, server_kim, server_liz  $279.00
+   2026-12-05 cook   need 5  (180 covers / 40 per cook, minimum 2)  -> cook_dan, cook_rosa, cook_luis (OT 6h)  $384.00
+   2026-12-05 server need 8  (180 covers / 25 per server, minimum 1)  -> server_ben, server_mo, server_kim  $207.00
+   Payroll estimate $4,068.00, overtime 10h
+   GAP 2026-12-04 short 2 server
+   GAP 2026-12-05 short 2 cook
+   GAP 2026-12-05 short 5 server
+   -> STF-0001 sent to the hiring matcher
+
+2. MATERIALS
+   beef patties   need 187.2 each, on hand 120, short 67.2  -> Order from Sysco by 2026-11-28
+   calf leather   need 27 sq ft, on hand 10, short 17  -> Preferred vendor is too late (order-by 2026-11-16). Use Leather depot (+$50.00), or move the first calf leather job later
+   fries          need 156 lb, on hand 50, short 106  -> Order from Sysco by 2026-11-28
+   leather soles  need 6 pair, on hand 10, short 0  -> in stock
+   roma tomatoes  need 62.4 lb, on hand 20, short 42.4  -> Order from Sysco by 2026-11-27
+   Purchase drafts: #1 80 beef patties from Sysco $88.00, #2 20 calf leather from Leather depot $230.00, #3 120 fries from Sysco $108.00, #4 50 roma tomatoes from Sysco $90.00 (manager sends)
+
+3. DOCUMENT -> supply_chain_brief.md written
+   Check-in: OK

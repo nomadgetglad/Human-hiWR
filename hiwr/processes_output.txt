@@ -1,0 +1,57 @@
+====================================================================== 
+1. DOCTOR'S OFFICE - Dr. Patel is booked out for weeks
+
+Earliest openings: Mon Dec 14, 9:00 AM, Mon Dec 14, 9:30 AM, Mon Dec 14, 10:00 AM   (90 slots booked before that)
+Jordan booked Mon Dec 14, 9:00 AM, Casey Mon Dec 14, 9:30 AM; both on the waitlist for anything earlier
+
+Mon Nov 23, 10:00 AM - a patient cancels Wed Dec 2, 10:00 AM
+  Offer -> Jordan by sms, held until 12:00: "An earlier appointment opened: 2026-12-02 at 10:00. Reply YES by 12:00 to take it."
+  Jordan replies YES at 10:40 -> booked Wed Dec 2, 10:00 AM; old Mon Dec 14, 9:00 AM released
+  Freed slot Mon Dec 14, 9:00 AM -> offered to Casey by call (no SMS consent on file, so staff call)
+  No visit reasons or clinical details are stored; HIPAA notes are in the plan.
+
+====================================================================== 
+2. KITCHEN - party of 10 wants Sat 7 PM (prime time)
+
+7 PM now: T1 party of 2, T4 party of 4, T5 party of 5, T6 party of 4; T2, T3, T7, T8 free
+  Option 1: T1+T2+T3+T4 (10 seats)  moves: party of 4 T4 -> T8; party of 2 T1 -> T7
+  Option 2: T5+T6 (10 seats)  moves: party of 5 T5 -> T2+T3; party of 4 T6 -> T8
+  Chosen: option 1 (fewest guests moved). Moves logged; nothing overwritten.
+  Upsell (sample prices): package $550.00 vs usual $380.00, extra server 3h $36.00 -> net uplift $134.00
+  Deposit $137.50 -> PENDING - requires double approval (0/2)
+  After manager_jo + owner_alex -> APPROVED
+
+====================================================================== 
+3. PROCESSES
+
+HOT - cooling a batch of chili (Food Code: 135F->70F in 2h, ->41F in 6h total)
+  15:50 reading 68F -> {'checkpoint': 'at or below 70F', 'passed': True, 'late': False}
+  20:15 sweep: 'at or below 41F' was due 20:00 -> ALERT manager now; log corrective action
+  20:25 reading 45F -> {'checkpoint': 'at or below 41F', 'passed': False, 'late': True}
+  Corrective action #1: discarded batch, waiting for manager verification
+
+CALCULATED - made-to-order boots promised Fri Dec 18, 3 days shipping
+  Worked back from delivery:
+    pattern    due Sun Dec 6, 5:00 PM
+    cut        due Mon Dec 7, 5:00 PM
+    stitched   due Thu Dec 10, 5:00 PM
+    lasted     due Sat Dec 12, 5:00 PM
+    soled      due Sun Dec 13, 5:00 PM
+    finished   due Mon Dec 14, 5:00 PM
+    qc_passed  due Tue Dec 15, 5:00 PM
+    shipped    due Tue Dec 15, 5:00 PM
+  pattern   -> {'checkpoint': 'pattern', 'passed': True, 'late': False}
+  cut       -> {'checkpoint': 'cut', 'passed': True, 'late': False}
+  Dec 11 sweep: 'stitched' missed -> opened SHP-0001 (priority 30)
+  stitched  -> {'checkpoint': 'stitched', 'passed': False, 'late': True}
+  lasted, soled, finished recorded on time (buffer recovered)
+  PRODUCTION TEST sole bond 36 lbs (min 40), 9 stitches/in -> {'checkpoint': 'qc_passed', 'passed': False, 'late': False}
+  Dec 15 sweep: 'stitched' -> already on SHP-0001
+  Dec 15 sweep: 'qc_passed' -> already on SHP-0001
+  Dec 15 sweep: 'shipped' -> already on SHP-0001
+  Ticket SHP-0001 priority 30: order:1 at risk: 'stitched' missed 2026-12-10T17:00, promised 2026-12-18T17:00
+
+CHECK-INS
+  waitlist fill: OK
+  party seating: OK
+  boots order:   NEEDS REVIEW

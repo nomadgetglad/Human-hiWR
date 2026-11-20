@@ -1,0 +1,39 @@
+WAREHOUSE - stocker_tim's pull list, 6 AM
+   A3  Tortilla chips 13oz  floor  0/12 back  20  pull 20  OUT ON FLOOR - pull now
+   D4  Greek yogurt 32oz    floor  0/8  back   0  pull  0  OUT EVERYWHERE - tell manager to order
+   B2  Cold brew 6-pack     floor  8/9  back  12  pull 10  below par (pull oldest date forward)
+   D1  Fresh salsa 16oz     floor  5/10 back  96  pull 19  below par (pull oldest date forward)
+   C2  Jasmine rice 5lb     floor  3/6  back   0  pull  0  low, no back stock - order
+   Tim pulls 20 chips -> floor 20, back 0. Move logged; chips now go on the order list.
+   Tim opens order costs: BLOCKED (Staff level sees units and aisles only)
+
+STEW - recipe costing and live counts
+   Cost cards (chef_marco, Manager level):
+   Fish tacos     cost $3.45 / price $15.00 = 23.0% food cost
+        cilantro 0.125 oz via Pico de gallo: 3.1c
+        lime 0.125 each via Pico de gallo: 2.5c
+        roma tomato 1.25 oz via Pico de gallo: 11.2c
+        white onion 0.5 oz via Pico de gallo: 2.0c
+   House burger   cost $1.97 / price $14.00 = 14.1% food cost
+        ketchup 0.45 oz via House sauce: 2.2c
+        mayo 0.9 oz via House sauce: 5.4c
+        pickle 0.15 oz via House sauce: 1.5c
+   Chicken salad  cost $2.24 / price $13.00 = 17.2% food cost
+
+   Hidden-ingredient check on order notes:
+   House burger 'no tomato': CONFLICT: House burger contains tomato in ketchup (in House sauce). Confirm with the guest or swap before firing.
+   Fish tacos 'no tomato': CONFLICT: Fish tacos contains tomato in roma tomato (in Pico de gallo). Confirm with the guest or swap before firing.
+   Chicken salad 'no tomato': OK: Chicken salad has no tomato
+
+   Portions left before service:
+     Chicken salad   60  (limited by chicken breast)
+     Fish tacos      80  (limited by white fish)
+     House burger   110  (limited by beef patty)
+   After selling 40 fish tacos and 30 burgers (inventory depleted from POS sales):
+     Fish tacos      40  (limited by white fish)
+     Chicken salad   60  (limited by chicken breast)
+     House burger    80  (limited by beef patty)
+
+   Next morning: fish delivery short, 160 oz expected, 60 oz received
+   Fish tacos: 52 portions instead of 72  -> SHP-0001 opened (only received fish entered inventory)
+   Cook view: portions and allergens only: costs BLOCKED
