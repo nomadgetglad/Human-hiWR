@@ -1030,3 +1030,61 @@ CREATE TABLE IF NOT EXISTS backstock_choices (        -- append-only manager pic
     chosen_by TEXT NOT NULL,
     at        TEXT NOT NULL
 );
+
+-- ===== Accounting view (Finance level): classify expenses, cross with revenue =====
+CREATE TABLE IF NOT EXISTS acct_txns (            -- append-only; one row per real money movement
+    id           INTEGER PRIMARY KEY,
+    txn_date     TEXT NOT NULL,
+    kind         TEXT NOT NULL CHECK (kind IN ('revenue', 'expense')),
+    amount_cents INTEGER NOT NULL CHECK (amount_cents >= 0),
+    description  TEXT NOT NULL,
+    counterparty TEXT,
+    department   TEXT,                            -- food, beverage, catering, shared
+    source       TEXT NOT NULL,                   -- pos, payroll, invoice, bank, money_action
+    source_ref   TEXT NOT NULL,
+    posted_by    TEXT NOT NULL,
+    UNIQUE (source, source_ref)                   -- the same record can't be posted twice
+);
+CREATE TABLE IF NOT EXISTS acct_class_events (    -- append-only; latest row per txn wins
+    id         INTEGER PRIMARY KEY,
+    txn_id     INTEGER NOT NULL REFERENCES acct_txns(id),
+    class      TEXT NOT NULL,
+    department TEXT,
+    status     TEXT NOT NULL CHECK (status IN ('proposed', 'needs_person', 'confirmed', 'excluded')),
+    by         TEXT NOT NULL,
+    reason     TEXT,
+    at         TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS acct_rules (           -- learned when a person corrects a proposal
+    id           INTEGER PRIMARY KEY,
+    counterparty TEXT NOT NULL,
+    class        TEXT NOT NULL,
+    department   TEXT,
+    created_by   TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS acct_memos (           -- shown beside the books, never added to them (e.g. waste at cost)
+    id INTEGER PRIMARY KEY, memo_date TEXT NOT NULL, kind TEXT NOT NULL, amount_cents INTEGER NOT NULL, note TEXT
+);
+CREATE TABLE IF NOT EXISTS acct_targets (         -- owner-set; latest per metric wins
+    id INTEGER PRIMARY KEY, metric TEXT NOT NULL, low REAL, high REAL, set_by TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS qb_pl_lines (          -- QuickBooks P&L imported per period, mapped to HiWR classes
+    id INTEGER PRIMARY KEY, period TEXT NOT NULL, qb_account TEXT NOT NULL, class TEXT NOT NULL,
+    amount_cents INTEGER NOT NULL, imported_by TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS acct_flags (
+    id INTEGER PRIMARY KEY, period TEXT NOT NULL, kind TEXT NOT NULL, detail TEXT NOT NULL,
+    at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TRIGGER IF NOT EXISTS acct_txns_no_update BEFORE UPDATE ON acct_txns
+BEGIN SELECT RAISE(ABORT, 'acct_txns is append-only: post a correcting entry'); END;
+CREATE TRIGGER IF NOT EXISTS acct_txns_no_delete BEFORE DELETE ON acct_txns
+BEGIN SELECT RAISE(ABORT, 'acct_txns is append-only: post a correcting entry'); END;
+CREATE TRIGGER IF NOT EXISTS acct_class_no_update BEFORE UPDATE ON acct_class_events
+BEGIN SELECT RAISE(ABORT, 'acct_class_events is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS acct_class_no_delete BEFORE DELETE ON acct_class_events
+BEGIN SELECT RAISE(ABORT, 'acct_class_events is append-only'); END;
+CREATE TABLE IF NOT EXISTS acct_inventory_counts (  -- value of stock on hand at close of day, from Stew/Warehouse counts
+    id INTEGER PRIMARY KEY, count_date TEXT NOT NULL, department TEXT NOT NULL, value_cents INTEGER NOT NULL,
+    counted_by TEXT NOT NULL
+);
