@@ -1,0 +1,43 @@
+1. ORDER POS-2210, table 12 (Maria): 2 burgers, 2 fish tacos
+   Burger A: guest said 'no tomato' (preference).  Burger B: guest has a declared tomato allergy.
+   [hiwr/table] The House burger comes with house sauce, which has ketchup in it. Did you want ketchup on that, or should we leave the house sauce off? (Or swap it for mayo.)
+   [hiwr/table] ALLERGY (tomato): House burger has tomato in House sauce. We're holding House sauce for safety. Can you confirm with the guest that this is right?
+   Kitchen ticket now:
+      1 x House burger  WAIT: question to guest
+      1 x House burger  [HOLD House sauce; ALLERGY tomato]
+      2 x Fish tacos
+
+2. SERVER ASKS THE TABLE
+   [server/table] Maria says ketchup in the sauce is fine, she just doesn't want sliced tomato.
+   [server/table] Allergy guest confirms: hold the house sauce, swap for plain mayo.
+   Kitchen ticket:
+      1 x House burger
+      1 x House burger  [HOLD House sauce; ADD mayo; ALLERGY tomato]
+      2 x Fish tacos
+
+3. CUSTOMER UPDATE BY TEXT after firing
+   [customer/sms] can we add 2 fries and make it 3 tacos?
+   Draft: add 2 x Fries (UPC 0003) at $4.00; change Fish tacos qty 2 -> 3. New total $81.00 (was $58.00). Needs: owner or kitchen OK (past fired)
+   Customer YES alone: BLOCKED: order is past fired; needs the owner or kitchen to approve
+   chef_marco OKs (fries and one more taco can still be made) -> total $81.00
+   [hiwr/sms] Got it: 2 fries added and a third taco. They'll be out in about 8 minutes.
+
+4. INVENTORY FOLLOWS THE ANSWERS
+   ketchup     100 -> 99.55
+   mayo        100 -> 99.1
+   white fish  200 -> 185
+   (Burger B's house sauce was held, so only Burger A used ketchup; tacos used fish for 3, not 2.)
+
+5. CHANGE LOG for POS-2210
+   19:02 House burger  added  by server_kim                 confirmed server_kim
+   19:02 House burger  added  by server_kim                 confirmed server_kim
+   19:02 Fish tacos    added  by server_kim                 confirmed server_kim
+   19:03 House burger  hold   by hiwr (allergy safe default) confirmed -
+   19:05 House burger  specs  by server_kim                 confirmed server_kim
+   19:06 House burger  specs  by server_kim                 confirmed server_kim
+   19:14 Fries         added  by customer                   confirmed customer
+   19:14 Fish tacos    qty    by customer                   confirmed chef_marco
+
+6. MADE-TO-ORDER: boot size change
+   Before cutting: change Western boot, roper toe size: 10.5D -> 11D -> needs customer YES
+   After cutting:  change Western boot, roper toe size: 11D -> 11.5D -> needs owner or kitchen OK (past cut); leather already cut, remake cost goes on a DISPUTE ticket if charged

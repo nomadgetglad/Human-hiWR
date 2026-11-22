@@ -1,0 +1,52 @@
+1. OWNER WRITES THE PROCEDURES (this is the 'training')
+   cut       v1: 2 checks
+   bevel     v1: 1 checks
+   weld      v1: 4 checks
+   hydrotest v1: 3 checks
+   coat      v1: 1 checks
+   Owner updates weld preheat after a customer spec change -> weld v2
+
+2. WORKER ASKS, AI ANSWERS FROM THE SOP ONLY
+   Q: What preheat do I need before the root pass?
+   A: Preheat the joint to between 200 and 350 F before the root pass.  [SOP weld v2]
+   Q: How long do I hold the hydrotest?
+   A: Hold for 10 minutes with no drop and no leaks.  [SOP hydrotest v1]
+   Q: Can I use the forklift?
+   A: Not in the procedures. Ask the foreman; the owner can add it to the SOP.
+
+3. CHECK-THROUGH, pipe P-1001 (12in Sch40, 36 in, rated 285 psi)
+   bevel     cruz  BLOCKED: P-1001 hasn't passed cut yet
+   cut       ana   SOP v1: PASS
+   bevel     cruz  SOP v1: PASS
+   weld      ana   BLOCKED: ana isn't certified for weld
+   weld      cruz  SOP v2: PASS
+   hydrotest dee   SOP v1: FAIL - test_psi=420 (allowed 427.5..-)
+   Coat try: BLOCKED: P-1001 is on hold from a failed check
+   Retest after re-pressurizing: True
+   Coat: True
+
+4. STAFFING QUOTA from last week's output (target 60 pipes/day, 8h shift)
+   cut        5.96 pipes/worker-hr -> 2 workers (capacity 95/day)
+   bevel      6.97 pipes/worker-hr -> 2 workers (capacity 112/day)
+   weld       2.34 pipes/worker-hr -> 4 workers (capacity 75/day)
+   hydrotest  4.04 pipes/worker-hr -> 2 workers (capacity 65/day)
+   coat        4.9 pipes/worker-hr -> 2 workers (capacity 78/day)
+   Need 12 workers, $2,328.00/day, $38.80 labor per pipe
+   Last week: only 49 pipes finished at $163.27 labor per pipe, because coat was staffed 2h a day and starved the line
+   Bottleneck: weld. With 8 certified workers on hand, short 4 -> STAFFING ticket for the hiring matcher
+
+5. ROTATION, Mon-Fri (only certified stations, max 2 days running on one)
+   Mon: weld cruz, dee, gil | bevel ana | hydrotest ben, eli | coat fay | cut hal
+   Tue: weld cruz, dee, gil | bevel ben | hydrotest hal, eli | coat ana | cut fay
+   Wed: weld cruz, dee, gil | bevel fay | hydrotest ben, hal | coat eli | cut ana
+   Thu: weld cruz, dee, gil | bevel ben | hydrotest eli, hal | coat ana | cut fay
+   Fri: weld cruz, dee, gil | bevel ana | hydrotest ben, eli | coat hal | cut fay
+   Days per station: {'cruz': {'weld': 5}, 'dee': {'weld': 5}, 'gil': {'weld': 5}, 'ana': {'bevel': 2, 'coat': 2, 'cut': 1}, 'ben': {'bevel': 2, 'hydrotest': 3}, 'fay': {'bevel': 1, 'coat': 1, 'cut': 3}, 'eli': {'hydrotest': 4, 'coat': 1}, 'hal': {'hydrotest': 3, 'coat': 1, 'cut': 1}}
+   Weld can't rotate: only 3 people are certified for 3 weld slots. Suggest cross-training 2 more (e.g. ben, hal) so welders get relief days.
+
+6. WHO SEES WHAT
+   ana         sees: my_station
+   foreman_bo  sees: my_station, foreman_board
+   hr_lena     sees: my_station, hr_roll_call
+   owner_alex  sees: my_station, foreman_board, hr_roll_call
+   Foreman opens HR / roll call: BLOCKED: foreman_bo can't open hr_roll_call (needs hr_manager)

@@ -1,0 +1,43 @@
+1. REMINDER CALL  Fri Nov 20, 10:00 AM - host_ana calls Dana about Sat Nov 21, 5-9 PM, 40 guests, quote $1,800
+   Dana: "We have to cancel tomorrow. Can we do next weekend instead?"
+
+2. CANCELLATION IMPACT  notice 31.0h (policy: 48h)  late=True
+   Late fee (20% of quote): $360.00  waivable if rebooked within 14 days
+   Call-in pay: cook_luis 3.0h = $54.00
+   Call-in pay: cook_rosa 3.0h = $60.00
+   Call-in pay: server_kim 3.0h = $36.00
+   Equipment cancel fee: chafing set $60.00  -> anticipated costs
+   Sunk cost if nothing is waived: $210.00
+
+3. OPEN SLOTS next 7 days, 4h, 2 cooks + 1 server + chafing set, same 5 PM start, cheapest first
+   2026-11-27T17:00  payroll $192.00 + equipment $120.00 = $312.00   [cook_dan, cook_rosa, server_ben]
+   2026-11-24T17:00  payroll $218.00 + equipment $120.00 = $338.00   [cook_rosa, cook_luis (OT 2.0h), server_kim]
+   2026-11-28T17:00  payroll $218.00 + equipment $120.00 = $338.00   [cook_rosa, cook_luis (OT 2.0h), server_kim]
+   (Mon: one cook only. Wed: chafing set rented out. Thu: Thanksgiving, nobody scheduled.)
+
+4. DANA PICKS Sat Nov 28, 5 PM -> appointment #2, linked to cancelled #1
+   Cost: $338.00 vs original $320.00  (+$18.00, 2.0h overtime)
+   Margin on $1,800 quote: before $1,480.00, after $1,462.00
+   Confirmation text allowed? True
+
+5. MONEY ACTIONS - nothing is charged or paid yet
+   #1 [fee] $0.00  Late cancellation fee $360.00 - proposed WAIVED (rebooked within 14 days)  -> PENDING - requires double approval (0/2)
+   #2 [payroll] $54.00  Call-in pay 3.0h for cook_luis (cancelled shift)  -> PENDING - requires double approval (0/2)
+   #3 [payroll] $60.00  Call-in pay 3.0h for cook_rosa (cancelled shift)  -> PENDING - requires double approval (0/2)
+   #4 [payroll] $36.00  Call-in pay 3.0h for server_kim (cancelled shift)  -> PENDING - requires double approval (0/2)
+
+6. CERTIFIED APPROVAL
+   Blocked: host_ana is not certified for fee approvals
+   #1 -> APPROVED
+   #2 -> APPROVED
+   #3 -> APPROVED
+   #4 -> APPROVED
+
+7. AUTHORITY CHECK-IN
+   OK
+
+Client history:
+   created {"name": "Dana Whitfield"}
+   phone_added {"phone": "+19105550123", "label": "mobile"}
+   call {"appointment": 1, "type": "reminder", "outcome": "cancel_and_reschedule", "note": "Family emergency; wants next weekend, evening"}
+   rescheduled {"from": 1, "to": 2, "starts_at": "2026-11-28T17:00"}

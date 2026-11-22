@@ -1,0 +1,29 @@
+   Pharmacist tries to certify a tech to verify: BLOCKED: rph_nguyen holds pharmacist_verify but was not allowed to certify others
+
+1. JORDAN, Rx 4471203, promised in 2 hours
+   09:05 tech_lily  insurance_check     
+   09:10 tech_lily  filling             
+   09:30 tech_lily  pharmacist_verified  BLOCKED: tech_lily is not certified to verify prescriptions
+   09:35 rph_nguyen pharmacist_verified 
+   09:40 tech_lily  ready                -> sms: "Main St Pharmacy: your prescription order #1203 is ready for pickup. Bring a photo ID."
+   15:00 tech_lily  picked_up            BLOCKED: check the patient's photo ID before handing over
+   15:01 tech_lily  picked_up           
+
+2. CASEY, Rx 4471288, insurance hold then out of stock
+   10:05 tech_lily  insurance_check     
+   10:10 tech_lily  insurance_hold       -> call list: "Main St Pharmacy: your prescription order #1288 needs an insurance update. Please call us."
+   10:20 tech_lily  filling              BLOCKED: on insurance_hold; resume it first
+   13:00 tech_lily  resume              
+   13:05 tech_lily  filling             
+   13:10 tech_lily  out_of_stock         -> call list: "Main St Pharmacy: your prescription order #1288 is delayed (expected Mon Nov 23). We'll let you know when it's ready."
+
+3. MORGAN, ready since Nov 11, not picked up
+   Controlled substance: NOT TRACKED: controlled substances are handled only in the pharmacy system
+
+4. PICKUP BOARD, Fri Nov 20, 4 PM
+   RX-4469001  Morgan L.  ready                            promised 11-11 12:00  remind: returns 2026-11-21
+   RX-4471203  Jordan R.  picked_up                        promised 11-20 11:00
+   RX-4471288  Casey F.   out_of_stock (at filling)        promised 11-21 10:00
+   Morgan's reminder: Main St Pharmacy: order #9001 is still waiting for pickup and will be returned to stock on 2026-11-21.
+
+   Stored per order: Rx number, stage, times, staff ID. No drug, dose or diagnosis.

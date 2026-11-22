@@ -1,0 +1,79 @@
+Posting the same Sysco invoice again: BLOCKED: invoice SYS-2026-11-02 is already posted (no double counting)
+Posting refund before approval: BLOCKED: money action 1 is PENDING - requires double approval (0/2); it posts after approval
+Refund posted after two approvals.
+
+1. REVIEW QUEUE (HiWR proposes, a Finance person confirms)
+   #535 2026-11-03 Sysco                     $691.42  HiWR: duplicate?         same amount and payee as #341 (invoice SYS-2026-11-02) within 3 days; if it's the payment of that invoice, exclude it
+   #534 2026-11-07 Amazon                     $86.40  HiWR: unclassified       no rule matches; a person picks the class
+   #533 2026-11-12 Carolina Refrigeration  $3,400.00  HiWR: equipment_purchase $3,400.00 and reads like a replacement, so it may be capital, not a repair. Ask the accountant
+   #536 2026-11-15 Lowes                     $212.18  HiWR: unclassified       no rule matches; a person picks the class
+   chef_marco tries to confirm: BLOCKED: confirming a classification needs Finance level (3); chef_marco is level 2
+   Next Amazon charge now proposed as supplies (rule from accounting_sue)
+   Sue confirmed the compressor as capital, Amazon as supplies, excluded the Sysco ACH; Lowes left for later
+
+2. NOVEMBER TO DATE, FINANCE VIEW (accounting_sue)
+P&L view 2026-11-01 to 2026-11-19 (confirmed entries only)
+   Gross sales              $61,211.86
+   Refunds/comps               -$48.00
+   Net sales                $61,163.86
+   COGS                    -$19,123.70
+      beverage_cost          $2,517.20
+      food_cost             $16,606.50
+   Labor                   -$20,219.79
+      payroll_tax            $1,436.61
+      wages                 $18,783.18
+   Occupancy               -$10,619.00
+      rent                   $8,500.00
+      utilities              $2,119.00
+   Operating                -$2,092.02
+      card_fees              $1,652.63
+      supplies                 $439.39
+      (food_cost includes -$620.00 for stock change: opening count minus closing count)
+      (beverage_cost includes $70.00 for stock change: opening count minus closing count)
+   Operating profit          $9,109.35  (14.9% of net sales)
+   Crossed with revenue:
+      food cost %           33.1%  ABOVE target 32%
+      beverage cost %       22.7%  in range
+      labor %               33.1%  in range
+      prime cost %          64.3%  in range
+      occupancy %           17.4%  ABOVE target 10%
+   Prime cost (COGS + labor) $39,343.49
+   Memo: waste at cost $720.00 = 4.3% of food cost (already inside food cost, not added again)
+   Not in P&L: capital spend $3,400.00 (accountant sets depreciation)
+   By department (sales minus its own COGS and labor):
+      beverage  sales  $11,071.64  cogs  $2,517.20  labor  $2,467.54  contribution   $6,086.90 (55.0%)
+      food      sales  $50,140.22  cogs $16,606.50  labor $10,760.12  contribution  $22,725.60 (45.4%)
+      shared labor (managers, payroll tax) $6,992.13 and shared COGS $0.00 are not split across departments
+   Partial month: rent and utilities post in full on the 1st, so occupancy % reads high until month end
+   Not counted yet: 1 entry, $212.18, waiting on a person
+
+3. SAME PERIOD, MANAGER VIEW (chef_marco)
+Kitchen numbers 2026-11-01 to 2026-11-19 (percentages only; dollars and payroll need Finance level)
+   food cost %              33.1%  ABOVE target 32%
+   beverage cost %          22.7%  in range
+   labor %                  33.1%  in range
+   prime cost %             64.3%  in range
+   waste % of food cost     4.3%
+   cook_luis opens it: BLOCKED: the accounting view needs Manager (2) for kitchen percentages or Finance (3); cook_luis is level 0
+
+4. NOVEMBER TO DATE vs THE SAME 19 DAYS OF OCTOBER
+2026-10-01..2026-10-19  vs  2026-11-01..2026-11-19
+   net sales             $62,722.72 ->   $61,163.86
+   food cost %         29.3% -> 33.1%  (+3.8 pts)  FLAG
+   beverage cost %     20.0% -> 22.7%  (+2.7 pts)  FLAG
+   labor %             32.9% -> 33.1%  (+0.2 pts)
+   prime cost %        60.5% -> 64.3%  (+3.8 pts)  FLAG
+   occupancy %         16.9% -> 17.4%  (+0.5 pts)
+   operating margin %  19.3% -> 14.9%  (-4.4 pts)
+   driver: food_cost 24.0% -> 27.2% of net sales (+3.2 pts)
+   driver: beverage_cost 3.6% -> 4.1% of net sales (+0.5 pts)
+   driver: rent 13.6% -> 13.9% of net sales (+0.3 pts)
+
+5. QUICKBOOKS CHECK (QuickBooks is the source of truth)
+   FLAG: benefits: HiWR $0.00 vs QuickBooks $412.50 (gap -$412.50). no HiWR entry explains it; it was entered only in QuickBooks (a journal entry or a bill paid outside HiWR), so add the source record to HiWR or ask the bookkeeper
+   FLAG: supplies: HiWR $439.39 vs QuickBooks $651.57 (gap -$212.18). #536 Lowes $212.18 is still needs_person
+
+6. AUTHORITY CHECK-IN
+   OK
+   Access log rows for the accounting view: 3
+   Deleting ledger rows: acct_txns is append-only: post a correcting entry

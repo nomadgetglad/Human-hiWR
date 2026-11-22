@@ -1,0 +1,41 @@
+1. SWEEP (last 28 days)
+   item                   sold/day  stock  days of supply  expires in  unsold at expiry  status
+   Canned soup 15oz            2.2    248             112        559d                 0  SLOW
+   Oat milk 64oz               2.0    144              72         51d                42  SLOW
+   Fresh salsa 16oz            2.5    120            47.3         18d                74  SLOW
+   Granola 12oz                1.5     48            32.8        132d                 0  SLOW
+   Greek yogurt 32oz           3.1     30             9.5         11d                 0  FAST
+   Tortilla chips 13oz         9.0     50             5.5        101d                 0  FAST
+   Cold brew 6-pack            6.9     30             4.3        162d                 0  FAST
+
+2. PROPOSALS to manager_jo  (Inventory Management > sales)
+   #1 Canned soup 15oz (shelf-stable)
+       best discount 10% ($2.49 -> $2.24) over 14 days: sells 37/248 vs 31 with no sale
+       margin $42.18 vs $43.09  -> -$0.91
+       $220.00 tied up in back stock; pause reorders 83 days (until 2027-02-11) to get back to 30 days of supply
+       bundle: Display beside Tortilla chips 13oz (9.0/day): buy Tortilla chips 13oz, get Canned soup 15oz 10% off
+   #2 Oat milk 64oz (perishable, 51 days to expiry)
+       best discount 20% ($5.49 -> $4.39) over 50 days: sells 140/144 vs 100 with no sale
+       margin $240.20 vs $174.60 (no sale throws out 44 units, $114.40)  -> +$65.60
+       bundle: Display beside Cold brew 6-pack (6.9/day): buy Cold brew 6-pack, get Oat milk 64oz 20% off
+   #3 Fresh salsa 16oz (perishable, 18 days to expiry)
+       best discount 20% ($4.99 -> $3.99) over 17 days: sells 60/120 vs 42 with no sale
+       margin $-36.60 vs $-66.42 (no sale throws out 78 units, $179.40)  -> +$29.82
+       bundle: Display beside Tortilla chips 13oz (9.0/day): buy Tortilla chips 13oz, get Fresh salsa 16oz 20% off
+   #4 Granola 12oz (shelf-stable)
+       best discount 10% ($6.99 -> $6.29) over 14 days: sells 25/48 vs 21 with no sale
+       margin $74.75 vs $77.49  -> -$2.74
+       $99.00 tied up in back stock; pause reorders 2 days (until 2026-11-22) to get back to 30 days of supply
+       bundle: Display beside Tortilla chips 13oz (9.0/day): buy Tortilla chips 13oz, get Granola 12oz 10% off
+   Lift assumption: 20% more units per 10% off (sample; check-ins replace it with this store's results)
+
+3. DECISIONS
+   Blocked: clerk_sam cannot approve price changes (needs Manager level or price_change)
+   #1 Canned soup 15oz: changed -> no markdown, reorders paused until 2027-02-11, bundle display only
+   #2 Oat milk 64oz: approved -> OATM-05 goes to 20% off from 2026-11-20 to 2027-01-09; shelf tags printed
+   #3 Fresh salsa 16oz: approved -> SALS-02 goes to 20% off from 2026-11-20 to 2026-12-07; shelf tags printed
+   #4 Granola 12oz: changed -> no markdown, reorders paused until 2026-11-22, bundle display only
+
+4. CHECK-IN after the sale (Dec 8, sample results)
+   Fresh salsa: forecast 60 units, actual 54 -> OK
+   Next proposals use the measured lift for deli items.

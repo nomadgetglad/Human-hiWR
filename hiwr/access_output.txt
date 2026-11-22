@@ -1,0 +1,54 @@
+1. LEVELS (account holder only)
+   cook_luis       -> 0 Staff
+   lead_rosa       -> 1 Lead
+   chef_marco      -> 2 Manager
+   accounting_sue  -> 3 Finance
+   chef_marco sets cook_luis to Manager: BLOCKED: only the account holder sets levels (chef_marco is not)
+
+2. WHAT EACH LEVEL SEES
+   cook_luis
+     clients : [{'display_name': 'Maria', 'phone': '***-***-0101'}]
+     costs   : BLOCKED: order_costs needs level 2 (Manager); cook_luis is level 0
+     payroll : BLOCKED: payroll needs level 3 (Finance); cook_luis is level 0
+   lead_rosa
+     clients : [{'display_name': 'Maria', 'phone': '***-***-0101'}]
+     costs   : BLOCKED: order_costs needs level 2 (Manager); lead_rosa is level 1
+     payroll : BLOCKED: payroll needs level 3 (Finance); lead_rosa is level 1
+   chef_marco
+     clients : [{'display_name': 'Maria Lopez', 'e164': '+19105550101'}]
+     costs   : {'order': 1, 'food_cost': '$3.10', 'price': '$14.00', 'margin': '78%'}
+     payroll : BLOCKED: payroll needs level 3 (Finance); chef_marco is level 2
+   accounting_sue
+     clients : [{'display_name': 'Maria Lopez', 'e164': '+19105550101'}]
+     costs   : {'order': 1, 'food_cost': '$3.10', 'price': '$14.00', 'margin': '78%'}
+     payroll : {'week': 'Nov 30', 'total': '$4,068.00'}
+
+3. TASK CERTIFICATION CHAIN
+   owner_alex -> chef_marco: inventory_audit + roll_call, may certify others (audit expires 2027-06-30)
+   chef_marco -> lead_rosa: inventory_audit (asked for 2028-01-01, capped to 2027-06-30)
+   chef_marco -> cook_luis: roll_call
+   chef_marco -> lead_rosa may certify others: BLOCKED: only the account holder can let someone certify others
+   lead_rosa  -> cook_luis inventory_audit  : BLOCKED: lead_rosa holds inventory_audit but was not allowed to certify others
+   chef_marco -> cook_luis payroll_approval : BLOCKED: payroll_approval needs Finance level (3) or higher, so the approver can see what they approve
+   chef_marco -> lead_rosa receiving_check  : BLOCKED: chef_marco does not hold receiving_check, so cannot certify others for it
+   Can lead_rosa run the inventory audit? True
+   Can cook_luis take roll call?         True
+   Note: a task never raises a level. Rosa audits counts (level 1) but still can't see order costs.
+
+4. ONE SYSTEM FOR MONEY APPROVALS
+   owner_alex -> chef_marco payroll_approval: BLOCKED: payroll_approval needs Finance level (3) or higher, so the approver can see what they approve
+   Payroll action approved via task grants: APPROVED
+   cook_luis tries to approve: BLOCKED: cook_luis is not certified for payroll approvals
+
+5. REVOKE A CERTIFIER
+   owner_alex revokes chef_marco's inventory_audit
+   Can lead_rosa still audit?  False (her grant came through Marco)
+   Can cook_luis still take roll call? True (Marco still holds roll_call)
+
+6. PERMISSIONS REPORT (account holder view)
+   accounting_sue  level 3 Finance    tasks: payroll_approval
+   chef_marco      level 2 Manager    tasks: roll_call
+   cook_luis       level 0 Staff      tasks: roll_call
+   lead_rosa       level 1 Lead       tasks: -
+   manager_jo      level 3 Finance    tasks: payroll_approval
+   Access log entries: 12 | denied: 7

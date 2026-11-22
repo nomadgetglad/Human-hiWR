@@ -1,0 +1,42 @@
+Henderson house, $385,000 contract, permit BP-27-0142, Jan 4 to Jul 30 2027
+
+1. PHASES AND INSPECTION GATES
+   Footings and foundation passed. Framing started Feb 8.
+   Rough-in try before framing inspection: BLOCKED: 'Rough-in: plumbing, electrical, HVAC' can't start: framing inspection for 'Framing' has not passed
+   Framing passed Mar 12; rough-in started Mar 15.
+
+2. FAILED INSPECTION
+   Rough-in failed Apr 2 -> INS-0001: rough-in inspection failed on 'Rough-in: plumbing, electrical, HVAC': missing nail plates at 6 studs; box fill over limit in kitchen (responsible: Port City Electric)
+   Insulation try: BLOCKED: 'Insulation' can't start: rough-in inspection for 'Rough-in: plumbing, electrical, HVAC' has not passed
+
+3. SUBCONTRACTOR DRAWS (10% retainage held)
+   Cape Fear Plumbing  to 50%: gross $9,250.00, retainage $925.00, net $8,325.00 -> PENDING - requires double approval (0/2)
+   Coastal HVAC        to 50%: gross $8,000.00, retainage $800.00, net $7,200.00 -> BLOCKED: insurance expired 2027-03-15
+   Port City Electric  to 50%: gross $11,000.00, retainage $1,100.00, net $9,900.00 -> BLOCKED: no lien waiver with this draw
+   Port City Electric  to 50%: gross $11,000.00, retainage $1,100.00, backcharge $75.00, net $9,825.00 -> PENDING - requires double approval (0/2)
+   Coastal HVAC renews insurance to 2028-03-15 and resubmits:
+   Coastal HVAC        to 50%: net $7,200.00 -> PENDING - requires double approval (0/2)
+   All approved by pm_dana + accounting_sue.
+
+4. REINSPECTION AND THE REST OF THE JOB
+   Rough-in passed Apr 9 -> INS-0001 now 'resolved pending financial sync'
+   Retainage before final: BLOCKED: retainage stays held until final inspection passes
+   Cape Fear Plumbing  final draw: net $8,325.00 (unconditional waiver) -> pending_approval
+   Port City Electric  final draw: net $9,900.00 (unconditional waiver) -> pending_approval
+   Coastal HVAC        final draw: net $7,200.00 (conditional waiver) -> pending_approval
+   Retainage release:
+     Cape Fear Plumbing  $1,850.00: pending approval #7
+     Port City Electric  $2,200.00: pending approval #8
+     Coastal HVAC        $1,600.00: held: final unconditional lien waiver missing
+
+5. CREW PAYROLL AND JOB COST (sample logs crew time on framing only)
+   Framing: $23,100.00 -> PENDING - requires double approval (0/2)
+   phase                                   crew labor      budget        subs  inspection
+   Site prep and footings                       $0.00  $18,000.00       $0.00  footing inspection: pass
+   Foundation                                   $0.00  $15,000.00       $0.00  foundation inspection: pass
+   Framing                                 $23,100.00  $21,000.00       $0.00  framing inspection: pass   OVER BUDGET
+   Rough-in: plumbing, electrical, HVAC         $0.00   $6,000.00  $56,500.00  rough-in inspection: pass
+   Insulation                                   $0.00   $3,000.00       $0.00  insulation inspection: pass
+   Drywall and finishes                         $0.00  $35,000.00       $0.00  final inspection: pass
+
+   Check-in: NEEDS REVIEW
