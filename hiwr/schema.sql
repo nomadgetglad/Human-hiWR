@@ -283,6 +283,9 @@ CREATE TABLE IF NOT EXISTS plan_owners (
 );
 CREATE TRIGGER IF NOT EXISTS approver_certifications_no_update BEFORE UPDATE ON approver_certifications BEGIN SELECT RAISE(ABORT, 'approver_certifications is append-only'); END;
 CREATE TRIGGER IF NOT EXISTS approver_certifications_no_delete BEFORE DELETE ON approver_certifications BEGIN SELECT RAISE(ABORT, 'approver_certifications is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS money_actions_no_update BEFORE UPDATE ON money_actions BEGIN SELECT RAISE(ABORT, 'money_actions is append-only: an approval covers this exact amount; request a new action'); END;
+CREATE TRIGGER IF NOT EXISTS money_actions_no_delete BEFORE DELETE ON money_actions BEGIN SELECT RAISE(ABORT, 'money_actions is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS plan_owners_no_update BEFORE UPDATE ON plan_owners BEGIN SELECT RAISE(ABORT, 'plan_owners is append-only'); END;
 CREATE TRIGGER IF NOT EXISTS approvals_no_update BEFORE UPDATE ON approvals BEGIN SELECT RAISE(ABORT, 'approvals is append-only'); END;
 CREATE TRIGGER IF NOT EXISTS approvals_no_delete BEFORE DELETE ON approvals BEGIN SELECT RAISE(ABORT, 'approvals is append-only'); END;
 CREATE TRIGGER IF NOT EXISTS result_checkins_no_update BEFORE UPDATE ON result_checkins BEGIN SELECT RAISE(ABORT, 'result_checkins is append-only'); END;
@@ -1088,3 +1091,32 @@ CREATE TABLE IF NOT EXISTS acct_inventory_counts (  -- value of stock on hand at
     id INTEGER PRIMARY KEY, count_date TEXT NOT NULL, department TEXT NOT NULL, value_cents INTEGER NOT NULL,
     counted_by TEXT NOT NULL
 );
+
+-- ===== Signed approvals (hiwr_signing.py, prototype) =====
+-- Approver public keys, each signed by the account holder's pinned key. Private keys never come here.
+CREATE TABLE IF NOT EXISTS approver_keys (
+    id              INTEGER PRIMARY KEY,
+    member          TEXT NOT NULL,
+    public_key      TEXT NOT NULL,                  -- Ed25519, hex
+    status          TEXT NOT NULL CHECK (status IN ('active', 'revoked')),
+    owner_signature TEXT NOT NULL,
+    at              TEXT NOT NULL DEFAULT (datetime('now'))
+);
+-- Every signed request and decision, hash-chained: each row holds the hash of the row before it.
+CREATE TABLE IF NOT EXISTS signed_decisions (
+    id               INTEGER PRIMARY KEY,
+    money_action_id  INTEGER NOT NULL REFERENCES money_actions(id),
+    signer           TEXT NOT NULL,
+    role             TEXT NOT NULL CHECK (role IN ('request', 'approve', 'reject')),
+    key_id           INTEGER NOT NULL REFERENCES approver_keys(id),
+    payload          TEXT NOT NULL,                 -- exactly what was signed
+    signature        TEXT NOT NULL,
+    prev_hash        TEXT NOT NULL,
+    hash             TEXT NOT NULL UNIQUE,
+    at               TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE (money_action_id, signer, role)
+);
+CREATE TRIGGER IF NOT EXISTS approver_keys_no_update BEFORE UPDATE ON approver_keys BEGIN SELECT RAISE(ABORT, 'approver_keys is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS approver_keys_no_delete BEFORE DELETE ON approver_keys BEGIN SELECT RAISE(ABORT, 'approver_keys is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS signed_decisions_no_update BEFORE UPDATE ON signed_decisions BEGIN SELECT RAISE(ABORT, 'signed_decisions is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS signed_decisions_no_delete BEFORE DELETE ON signed_decisions BEGIN SELECT RAISE(ABORT, 'signed_decisions is append-only'); END;

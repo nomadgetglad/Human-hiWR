@@ -93,7 +93,9 @@ def me(x_member: str = Header(None)):
 
 
 @app.post("/api/demo/reset")
-def demo_reset():
+def demo_reset(x_member: str = Header(None)):
+    with LOCK:
+        need(member(x_member), 4, "Resetting the sample data")
     reset()
     return {"ok": True}
 
@@ -103,9 +105,10 @@ class Clock(BaseModel):
 
 
 @app.post("/api/demo/clock")
-def demo_clock(c: Clock):
+def demo_clock(c: Clock, x_member: str = Header(None)):
     """Move the sample clock forward (16 to 22). POS sales up to that hour are added."""
     with LOCK:
+        member(x_member)
         if not (STATE["clock"] <= c.hour <= 22):
             raise HTTPException(400, f"The clock only moves forward, from {STATE['clock']}:00 to 22:00")
         STATE["clock"] = c.hour
@@ -381,6 +384,8 @@ def _card(m, kind, params):
         need(m, 2, "Finding cover")
         role = params.get("role")
         rule = d.execute("SELECT * FROM staffing_rules WHERE role=?", (role,)).fetchone()
+        if not rule:
+            raise HTTPException(404, f"No staffing rule for {role}")
         starts = f"{seed.TODAY}T{int(rule['start_hour']):02d}:00"
         ends = f"{seed.TODAY}T{int(rule['end_hour']):02d}:00"
         cands = find_same_night(d, role, starts, ends, now_iso())[: int(params.get("top", 3))]
@@ -413,6 +418,11 @@ def _card(m, kind, params):
             raise HTTPException(403, f"You are not certified for {a['scope']} approvals")
         if a["requested_by"] == m["id"]:
             raise HTTPException(403, "You asked for this one, so you cannot approve it")
+        st = money_action_status(d, a["id"])
+        if not st.startswith("PENDING"):
+            raise HTTPException(409, f"This one is already {st}; decisions are final")
+        if d.execute("SELECT 1 FROM approvals WHERE money_action_id=? AND approver=?", (a["id"], m["id"])).fetchone():
+            raise HTTPException(409, "You already decided on this one; the other approval has to come from someone else")
         n = d.execute("SELECT COUNT(*) FROM approvals WHERE money_action_id=? AND decision='approve'", (a["id"],)).fetchone()[0]
         after = ("APPROVED, money can move" if n + 1 >= 2 else "still PENDING, needs one more approver") if decision == "approve" else "REJECTED, nothing moves"
         return {"title": f"{decision.title()} {a['scope']} ${a['amount_cents'] / 100:,.2f}",
@@ -470,7 +480,14 @@ def confirm(pid: int, x_member: str = Header(None)):
         if not p or p["actor"] != m["id"] or p["state"] != "open":
             raise HTTPException(404, "This card is no longer open")
         _card(m, p["kind"], p["params"])          # re-check: data may have changed since the card was made
-        result = _apply(m, p["kind"], p["params"])
+        try:
+            result = _apply(m, p["kind"], p["params"])
+        except PermissionError as e:
+            db().rollback()
+            raise HTTPException(403, str(e))
+        except (LookupError, ValueError) as e:
+            db().rollback()
+            raise HTTPException(400, str(e))
         db().commit()
         p.update(state="confirmed", result=result)
         return p
@@ -497,8 +514,8 @@ def checkin(pid: int, c: CheckIn, x_member: str = Header(None)):
     with LOCK:
         m = member(x_member)
         p = PROPOSALS.get(pid)
-        if not p or p["state"] != "confirmed":
-            raise HTTPException(404, "Only confirmed changes get a check-in")
+        if not p or p["state"] != "confirmed" or p["actor"] != m["id"]:
+            raise HTTPException(404, "Only the person who confirmed a change gives its check-in")
         status = check_in(db(), f"{p['kind']}#{pid}: {p['title']}", m["id"], c.works, c.intended, c.note)
         db().commit()
         p["checkin"] = status

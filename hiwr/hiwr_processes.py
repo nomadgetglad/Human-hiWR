@@ -206,6 +206,31 @@ def open_ticket(db, ttype, subject, priority, now, actor, financial=None):
     return tid
 
 
+def close_ticket(db, tid, actor, now, note=None):
+    """v7: a ticket closes only once its money is settled. Every money action on it must be REJECTED, or
+    APPROVED by two people and posted to accounting exactly once. Otherwise it stays open and says why."""
+    from hiwr_contacts import money_action_status
+    t = db.execute("SELECT * FROM tickets WHERE id=?", (tid,)).fetchone()
+    if t is None:
+        raise LookupError(f"no ticket {tid}")
+    if t["status"] == "closed":
+        raise ValueError(f"{tid} is already closed")
+    blocking = []
+    for a in db.execute("SELECT id, scope, amount_cents FROM money_actions WHERE ticket_id=?", (tid,)):
+        st = money_action_status(db, a["id"])
+        posted = db.execute("SELECT COUNT(*) FROM acct_txns WHERE source='money_action' AND source_ref=?",
+                            (str(a["id"]),)).fetchone()[0]
+        if st.startswith("PENDING"):
+            blocking.append(f"money action {a['id']} ({a['scope']}) is {st}")
+        elif st == "APPROVED" and posted != 1:
+            blocking.append(f"money action {a['id']} ({a['scope']}) is approved but not posted to accounting")
+    if blocking:
+        raise PermissionError(f"{tid} can't close yet: " + "; ".join(blocking))
+    db.execute("UPDATE tickets SET status='closed' WHERE id=?", (tid,))
+    db.execute("INSERT INTO ticket_events(ticket_id, at, actor, event, detail) VALUES (?,?,?,?,?)",
+               (tid, now, actor, "closed", note))
+
+
 # ================= Hot and calculated processes =================
 
 def start_process(db, kind, cls, subject, started_at, checkpoints, deadline=None):

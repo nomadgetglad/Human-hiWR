@@ -9,6 +9,8 @@ def usd(c): return f"${c / 100:,.2f}"
 
 db = connect()
 add_plan_owner(db, "owner_alex", "setup")
+from hiwr_access import set_level
+set_level(db, "manager_jo", 3, "owner_alex")   # money approvers are Finance level
 for m in ("manager_jo", "owner_alex"):
     for scope in ("fee", "payroll"):
         certify(db, m, scope, "owner_alex")
