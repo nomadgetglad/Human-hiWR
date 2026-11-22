@@ -220,9 +220,14 @@ def get_contact(db, contact_id, actor, role):
 # ---------- authority: certified approval, check-ins, assignments ----------
 
 APPROVALS_NEEDED = 2
+MONEY_APPROVER_LEVEL = 3      # Finance; matches hiwr_access OWNER_ONLY_TASKS
 
 
 def add_plan_owner(db, member, added_by):
+    """The first owner is set up once (empty table). After that only an existing owner adds another."""
+    has_owner = db.execute("SELECT 1 FROM plan_owners LIMIT 1").fetchone() is not None
+    if has_owner and not _is_owner(db, added_by):
+        raise PermissionError(f"{added_by} is not a plan owner and cannot add owners")
     db.execute("INSERT OR IGNORE INTO plan_owners(member, added_by) VALUES (?,?)", (member, added_by))
 
 
@@ -233,12 +238,20 @@ def _is_owner(db, member):
 def certify(db, member, scope, granted_by, status="granted"):
     if not _is_owner(db, granted_by):
         raise PermissionError(f"{granted_by} is not a plan owner and cannot certify approvers")
+    from hiwr_access import level
+    if status == "granted" and level(db, member) < MONEY_APPROVER_LEVEL:
+        raise PermissionError(f"{member} is level {level(db, member)}; money approvers need Finance level "
+                              f"({MONEY_APPROVER_LEVEL}) or higher, so they can see what they approve")
     db.execute("INSERT INTO approver_certifications(member, scope, status, granted_by) VALUES (?,?,?,?)",
                (member, scope, status, granted_by))
 
 
 def is_certified(db, member, scope):
-    """Certified if granted here, or holding '<scope>_approval' in the access system (hiwr_access)."""
+    """Certified if granted here, or holding '<scope>_approval' in the access system (hiwr_access).
+    Either way the member must be at Finance level right now: a demotion switches approval off."""
+    from hiwr_access import level
+    if level(db, member) < MONEY_APPROVER_LEVEL:
+        return False
     r = db.execute("SELECT status FROM approver_certifications WHERE member=? AND scope=? "
                    "ORDER BY at DESC, id DESC LIMIT 1", (member, scope)).fetchone()
     if r:
@@ -249,6 +262,9 @@ def is_certified(db, member, scope):
 
 
 def request_money_action(db, scope, amount_cents, description, requested_by, ticket_id=None):
+    # 0 is allowed: a waiver (e.g. a late fee waived) still needs two approvers. Negative never is.
+    if not isinstance(amount_cents, int) or isinstance(amount_cents, bool) or amount_cents < 0:
+        raise ValueError("a money action is a whole number of cents, 0 or more; the scope says which way it moves")
     return db.execute(
         "INSERT INTO money_actions(scope, amount_cents, description, requested_by, ticket_id) VALUES (?,?,?,?,?)",
         (scope, amount_cents, description, requested_by, ticket_id)).lastrowid
@@ -256,10 +272,21 @@ def request_money_action(db, scope, amount_cents, description, requested_by, tic
 
 def approve(db, money_action_id, approver, decision="approve"):
     act = db.execute("SELECT * FROM money_actions WHERE id=?", (money_action_id,)).fetchone()
+    if act is None:
+        raise LookupError(f"no money action {money_action_id}")
+    if decision not in ("approve", "reject"):
+        raise ValueError("decision is approve or reject")
     if not is_certified(db, approver, act["scope"]):
         raise PermissionError(f"{approver} is not certified for {act['scope']} approvals")
     if approver == act["requested_by"]:
         raise PermissionError("the person who requested a money action cannot approve it")
+    status = money_action_status(db, money_action_id)
+    if not status.startswith("PENDING"):
+        raise PermissionError(f"money action {money_action_id} is already {status}; decisions are final")
+    if db.execute("SELECT 1 FROM approvals WHERE money_action_id=? AND approver=?",
+                  (money_action_id, approver)).fetchone():
+        raise PermissionError(f"{approver} already decided on money action {money_action_id}; "
+                              "the second approval has to come from someone else")
     db.execute("INSERT INTO approvals(money_action_id, approver, decision) VALUES (?,?,?)",
                (money_action_id, approver, decision))
     return money_action_status(db, money_action_id)

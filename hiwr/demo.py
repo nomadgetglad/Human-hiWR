@@ -63,6 +63,8 @@ except Exception as e:
 # --- authority: certified approval for refunds and payroll ---
 print("\n--- Authority ---")
 add_plan_owner(db, "owner_alex", "setup")
+from hiwr_access import set_level
+set_level(db, "manager_jo", 3, "owner_alex")   # money approvers are Finance level
 certify(db, "manager_jo", "refund", "owner_alex")
 certify(db, "owner_alex", "refund", "owner_alex")
 try:
