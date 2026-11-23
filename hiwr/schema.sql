@@ -1120,3 +1120,71 @@ CREATE TRIGGER IF NOT EXISTS approver_keys_no_update BEFORE UPDATE ON approver_k
 CREATE TRIGGER IF NOT EXISTS approver_keys_no_delete BEFORE DELETE ON approver_keys BEGIN SELECT RAISE(ABORT, 'approver_keys is append-only'); END;
 CREATE TRIGGER IF NOT EXISTS signed_decisions_no_update BEFORE UPDATE ON signed_decisions BEGIN SELECT RAISE(ABORT, 'signed_decisions is append-only'); END;
 CREATE TRIGGER IF NOT EXISTS signed_decisions_no_delete BEFORE DELETE ON signed_decisions BEGIN SELECT RAISE(ABORT, 'signed_decisions is append-only'); END;
+
+CREATE TABLE IF NOT EXISTS margin_choices (       -- append-only; what the owner picked to hold margin for a sample
+    id INTEGER PRIMARY KEY, sample TEXT NOT NULL, option TEXT NOT NULL, expected_cents INTEGER NOT NULL,
+    chosen_by TEXT NOT NULL, note TEXT, at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- ===== Pioneering phase (first setup of a business) =====
+CREATE TABLE IF NOT EXISTS pioneer_steps (        -- append-only log of setup progress
+    id INTEGER PRIMARY KEY, path TEXT NOT NULL, step TEXT NOT NULL, detail TEXT, by TEXT NOT NULL,
+    at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS catalog_meta (upc TEXT PRIMARY KEY REFERENCES catalog(upc), department TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS pos_connections (
+    id INTEGER PRIMARY KEY, system TEXT NOT NULL, method TEXT NOT NULL CHECK (method IN ('csv_export', 'api')),
+    mapping TEXT NOT NULL, status TEXT NOT NULL, connected_by TEXT NOT NULL
+);
+-- ===== Human as accounting + task list agent =====
+CREATE TABLE IF NOT EXISTS human_stage_events (
+    id INTEGER PRIMARY KEY, stage INTEGER NOT NULL, set_by TEXT NOT NULL, reason TEXT,
+    at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS auto_audit (            -- a sample of what Human confirmed on its own, for Finance to check
+    id INTEGER PRIMARY KEY, txn_id INTEGER NOT NULL REFERENCES acct_txns(id), result TEXT, checked_by TEXT
+);
+CREATE TABLE IF NOT EXISTS auto_blocks (counterparty TEXT PRIMARY KEY, blocked_by TEXT NOT NULL, reason TEXT);
+CREATE TABLE IF NOT EXISTS po_events (             -- append-only order updates: confirmed, shipped, received, short, price_diff
+    id INTEGER PRIMARY KEY, po_id INTEGER NOT NULL REFERENCES po_drafts(id), event TEXT NOT NULL,
+    material TEXT, qty REAL, detail TEXT, at TEXT NOT NULL, by TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS approved_price_sources ( -- only these hosts may feed vendor prices
+    domain TEXT PRIMARY KEY, vendor TEXT NOT NULL, method TEXT NOT NULL, approved_by TEXT NOT NULL, note TEXT
+);
+CREATE TABLE IF NOT EXISTS price_quotes (
+    id INTEGER PRIMARY KEY, vendor TEXT NOT NULL, material TEXT NOT NULL, upc TEXT, pack_size REAL NOT NULL,
+    pack_label TEXT, pack_cost_cents INTEGER NOT NULL, unit_cost_cents REAL NOT NULL, lead_days INTEGER,
+    source_url TEXT NOT NULL, fetched_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS vendor_suggestions (
+    id INTEGER PRIMARY KEY, material TEXT NOT NULL, from_vendor TEXT NOT NULL, to_vendor TEXT NOT NULL,
+    saving_pct REAL NOT NULL, weekly_saving_cents INTEGER NOT NULL, detail TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'proposed', decided_by TEXT
+);
+
+-- ===== Security patrol: sign-in data and database reads =====
+CREATE TABLE IF NOT EXISTS signin_events (         -- append-only; no passwords, device as a hash, network cut to /24
+    id INTEGER PRIMARY KEY, member TEXT NOT NULL, at TEXT NOT NULL, ok INTEGER NOT NULL,
+    device_hash TEXT NOT NULL, network TEXT NOT NULL, method TEXT NOT NULL   -- pin, badge, password+code
+);
+CREATE TABLE IF NOT EXISTS security_profiles (     -- usual working hours, set by a manager
+    member TEXT PRIMARY KEY, usual_start INTEGER NOT NULL, usual_end INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS security_alerts (
+    id INTEGER PRIMARY KEY, at TEXT NOT NULL, kind TEXT NOT NULL, member TEXT, severity TEXT NOT NULL,
+    detail TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'open', decided_by TEXT, decision TEXT,
+    UNIQUE (kind, member, at)
+);
+CREATE TABLE IF NOT EXISTS account_locks (
+    id INTEGER PRIMARY KEY, member TEXT NOT NULL, until TEXT, reason TEXT NOT NULL, by TEXT NOT NULL,
+    at TEXT NOT NULL, lifted_by TEXT
+);
+CREATE TRIGGER IF NOT EXISTS signin_no_update BEFORE UPDATE ON signin_events
+BEGIN SELECT RAISE(ABORT, 'signin_events is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS signin_no_delete BEFORE DELETE ON signin_events
+BEGIN SELECT RAISE(ABORT, 'signin_events is append-only'); END;
+CREATE TABLE IF NOT EXISTS datakeeper_findings (   -- what the data keeper found; fixes are proposals a person applies
+    id INTEGER PRIMARY KEY, run_at TEXT NOT NULL, check_name TEXT NOT NULL, severity TEXT NOT NULL,
+    detail TEXT NOT NULL, proposed_fix TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'open', decided_by TEXT
+);
