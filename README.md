@@ -7,5 +7,7 @@ inventory (Warehouse, Stew, Lab), customer service and money actions that always
 - [`hiwr/`](hiwr/): working sample code (Python 3 + SQLite, standard library only) with runnable demos.
   See [`hiwr/README.md`](hiwr/README.md).
 - [`ui/`](ui/): the Human app screens (FastAPI + React PWA). See [`ui/README.md`](ui/README.md).
+- [`agent/`](agent/): the operations assistant runner. Local (Ollama), cloud (Claude) or hybrid, with access,
+  privacy and approval rules enforced in code. See [`agent/README.md`](agent/README.md).
 - [`tests/`](tests/): `python -m pytest tests`. Security results and the signed-approval plan are in
   [`APPROVALS_SECURITY.md`](APPROVALS_SECURITY.md).
