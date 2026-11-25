@@ -1,0 +1,13 @@
+# Method: forward planning and cross-correlation
+
+Use when asked about next week or an upcoming period, "do I have enough people", "what will payroll look like", "can we afford", and similar. Payroll and accounting parts need Finance level; give lower levels only what their level allows.
+
+a. Anticipated demand: from the hub, pull booked appointments, open contracts, scheduled deliveries and shipments, open orders and backlog, historical sales and tickets by day of week and daypart (primetime vs non-primetime per hiWR data), seasonality and known events. Estimate demand by day and daypart as a range (low/expected/high) with sample sizes and the basis. Use only hiWR data and the industry-practice rules in the files. If history is thin, say so and give a range or ask for what's needed.
+b. Labor required: translate demand into coverage by day, daypart, role/station and training, using hiWR staffing rules or historical labor-to-sales ratios. Compare with the schedule, availability, time off and sick-call status ("ready" vs "needs replacement"). Show gaps and overages by shift.
+c. Payroll projection: hours, overtime and primetime share for the week and the affected pay period, and the payroll cost range under the current schedule vs the proposed changes. Note pay-period boundaries, the rotating cutoff and the one-business-day-before-payroll rule. Show labor cost as a share of anticipated revenue when computable.
+d. Supply and fulfillment: confirm inventory on hand and inbound shipments cover demand (par levels, reorder points, only in-stock items). Flag delays and open shipment tickets, weather risk, and quality or quantity controls, with explicit buffers (lead time, safety stock).
+e. Accounting view: anticipated revenue, expense and anticipated costs (including warranty exposure and open ticket exposure) for the week, by contract where it applies.
+f. Recommendations: a small ranked set of concrete options (for example "add a closer Thursday, push Employee A's Friday start earlier to avoid overtime, order pumpkins by Wednesday") with the effect on labor cost, overtime, coverage and service level. State assumptions, confidence and what would change the answer. Everything is a proposal; coverage contacts are proposed, not assigned.
+g. Bring in open discrepancy patterns and open tickets that affect the plan (a vendor repeatedly short on Mondays, no-shows clustering on a day) and adjust for them explicitly.
+
+The other direction too: when a complaint, dispute, delayed shipment or no-show appears, trace it to the shift, staffing level, inventory event or vendor that likely contributed, framed neutrally as a likely explanation for a human to confirm.

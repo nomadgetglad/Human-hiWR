@@ -1,0 +1,55 @@
+# Copy this file to agent/config.toml and edit it. config.toml is ignored by git.
+
+# local  = everything runs on this computer through Ollama. Nothing leaves the machine.
+# cloud  = every request goes to the Claude API (names swapped for labels first).
+# hybrid = routine lookups run locally; heavy reasoning (weekly plan, pattern analysis) goes to Claude.
+mode = "hybrid"
+
+[data]
+# The hiWR SQLite database and the folder of business files (invoices, schedules, policies).
+db = "hiwr.db"
+folder = "data"
+
+[local]
+host = "http://localhost:11434"
+model = "gpt-oss:20b"           # or "qwen3:30b"; pick one that supports tool calling
+num_ctx = 16384                 # at least 16k: Ollama's default context cuts the prompt off
+timeout_seconds = 300
+
+[cloud]
+model = "claude-opus-5-5"
+effort = "medium"               # low, medium, high, xhigh, max
+max_tokens = 16000
+# The API key comes from the ANTHROPIC_API_KEY environment variable (or `ant auth login`).
+# It never goes in this file.
+
+[hybrid]
+# Requests that need these methods go to the cloud. Everything else stays local.
+cloud_methods = ["planning", "patterns"]
+# If the cloud can't be reached, run the request locally instead of failing.
+fall_back_to_local = true
+
+[privacy]
+# Extra people to hide from the cloud, beyond those already in the hiWR database.
+extra_names = []
+# Vendor and company names are business names, so they are sent as-is unless this is true.
+hide_vendors = false
+
+[quickbooks]
+# QuickBooks is read only, always. Set connected = true and point export_file at a CSV export
+# (Reports > Export to CSV) to let the assistant reconcile against it.
+connected = false
+export_file = ""
+
+[business]
+# Used for live-person handoffs. Leave a field empty if you don't have it; the assistant will say it's missing
+# instead of inventing one.
+phone = ""
+text_number = ""
+hours = ""
+on_duty_manager = ""            # first name or role only
+
+[files]
+# Minimum access level to read a file in the data folder, by name pattern. Unlisted files need level 0.
+# 0 Staff, 1 Lead, 2 Manager, 3 Finance, 4 Account holder
+levels = { "*payroll*" = 3, "*pay_rate*" = 3, "*wage*" = 3, "*accounting*" = 3, "*quickbooks*" = 3, "*invoice*" = 2, "*contract*" = 2, "*vendor_price*" = 2 }
