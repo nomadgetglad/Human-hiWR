@@ -199,7 +199,10 @@ def need(m, lvl, what):
 @app.get("/api/members")
 def members():
     with LOCK:
-        return [{k: m[k] for k in ("id", "name", "title", "language")} for m in roster(db())]
+        d = db()
+        # set_up tells the sign-in screen to go straight to the first-time QR step for someone with no authenticator yet
+        return [{**{k: m[k] for k in ("id", "name", "title", "language")}, "set_up": bool(auth.factor(d, m["id"]))}
+                for m in roster(d)]
 
 
 def _any(d, sql, args=()):

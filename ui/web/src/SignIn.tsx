@@ -53,7 +53,7 @@ export function SignIn({ onDone }: { onDone: () => void }) {
             <h2 className="h2">{t("Who are you?")}</h2>
             <div className="signin-names">
               {members.map((m) => (
-                <Button key={m.id} className="btn btn-wide" onPress={() => setWho(m.id)}>
+                <Button key={m.id} className="btn btn-wide" onPress={() => { setWho(m.id); setMode((m as any).set_up === false ? "setup" : "code"); }}>
                   {m.name} <span className="muted small">{m.title}</span>
                 </Button>
               ))}
