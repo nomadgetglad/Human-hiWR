@@ -31,9 +31,9 @@ export function currentBusiness(me: Me): Business {
 }
 
 // Switch the whole app to another business, then reload into it. Account holder only (the server checks).
-export async function switchBusiness(me: Me, b: Business) {
+export async function switchBusiness(me: Me, b: Business, screen?: string) {
   await api(b.demo ? `/api/demo/reset?demo=${b.demo}` : "/api/demo/reset?sample=false", {});
-  location.href = `${location.pathname}?as=${encodeURIComponent(me.id)}`;
+  location.href = `${location.pathname}?as=${encodeURIComponent(me.id)}${screen ? `&screen=${screen}` : ""}`;
 }
 
 function BusinessSwitcher({ me, go }: { me: Me; go: (s: string) => void }) {
@@ -82,6 +82,35 @@ function BusinessSwitcher({ me, go }: { me: Me; go: (s: string) => void }) {
                     </Button>
                   </li>
                 ))}
+                <li>
+                  <Button
+                    className="note"
+                    isDisabled={busy}
+                    onPress={async () => {
+                      if (me.demo === "stew") {
+                        close();
+                        go("scene");
+                        return;
+                      }
+                      setBusy(true);
+                      try {
+                        await switchBusiness(me, BUSINESSES.find((x) => x.demo === "stew")!, "scene");
+                      } finally {
+                        setBusy(false);
+                      }
+                    }}
+                  >
+                    <span className="note-icon" aria-hidden>
+                      🎬
+                    </span>
+                    <span>
+                      <b>{t("Demo scene for Dad")}</b>
+                      <span className="muted small" style={{ display: "block" }}>
+                        {t("How prior invoices and payments settle the numbers")}
+                      </span>
+                    </span>
+                  </Button>
+                </li>
                 <li>
                   <Button
                     className="note"

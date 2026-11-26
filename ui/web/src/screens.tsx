@@ -19,6 +19,17 @@ export function Home({ me, go }: { me: Me; go: (s: string) => void }) {
   return (
     <section>
       <Assistant embedded me={me} />
+      {me.sample && (
+        <div className="panel row-between">
+          <div>
+            <h2 className="h2">🎬 {t("Prior invoices settle the numbers")}</h2>
+            <p className="muted small">{t("A five-step demo scene: invoices, payments, real costs and two-person approvals.")}</p>
+          </div>
+          <Button className="btn btn-primary" onPress={() => go("scene")}>
+            {t("Watch the scene")}
+          </Button>
+        </div>
+      )}
       {team && (
         <div className="panel team-start row-between">
           <div>

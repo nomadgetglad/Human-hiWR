@@ -64,6 +64,21 @@ def build_blank(path=":memory:"):
     return db
 
 
+# Prior vendor invoices for the demo scene (sample). Paid amounts against what actually arrived are what "settle"
+# the real unit cost the algorithms use; anything short or disputed stays anticipated until two people approve.
+PRIOR_INVOICES = [
+    {"number": "INV-8790", "vendor": "Sysco", "material": "white fish", "billed_qty": 160, "received_qty": 160,
+     "billed_cents": 9600, "paid_cents": 9600, "status": "paid", "note": "Arrived complete; fish went up to 60c an oz"},
+    {"number": "INV-8801", "vendor": "Sysco", "material": "white fish", "billed_qty": 160, "received_qty": 150,
+     "billed_cents": 9600, "paid_cents": 9000, "status": "paid_short", "note": "10 oz short; paid only for what arrived"},
+    {"number": "INV-8812", "vendor": "Sysco", "material": "white fish", "billed_qty": 160, "received_qty": 60,
+     "billed_cents": 8800, "paid_cents": 0, "status": "disputed", "note": "100 oz short, perishable: ticket SHP-0001, credit asked"},
+    {"number": "INV-8805", "vendor": "Sysco", "material": "beef patty", "billed_qty": 120, "received_qty": 120,
+     "billed_cents": 16800, "paid_cents": 16800, "status": "paid", "note": "Price went up from $1.35 to $1.40 a patty"},
+    {"number": "INV-8809", "vendor": "Sysco", "material": "corn tortilla", "billed_qty": 1500, "received_qty": 1500,
+     "billed_cents": 18000, "paid_cents": 18000, "status": "paid", "note": "Arrived complete, paid in full"},
+]
+
 # ---------- Trial demos, one per business type, offered before a plan is bought ----------
 # "stew" = restaurant, "stock" = stock house (warehouse / retail shelves), "lab" = long jobs (a house build).
 DEMOS = {

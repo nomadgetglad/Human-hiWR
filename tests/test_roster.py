@@ -430,3 +430,18 @@ def test_chat_refuses_card_numbers_and_strangers(c):
     c.post("/api/chat", json={"to": "team", "text": "kept"}, headers=H("fry_rosa"))
     with pytest.raises(Exception):
         appmod.db().execute("DELETE FROM team_messages")
+
+
+# ---------- Demo scene: prior invoices settle the numbers ----------
+
+def test_scene_settles_costs_from_paid_invoices(blank):
+    assert blank.get("/api/scene", headers=H("owner_alex")).status_code == 404       # demos only
+    blank.post("/api/demo/reset?demo=stew", headers=H("owner_alex"))
+    v = blank.get("/api/scene", headers=H("owner_alex")).json()
+    fish = next(u for u in v["units"] if u["material"] == "white fish")
+    assert fish["after"] == 60 and fish["before"] == 55
+    tacos = next(x for x in v["dishes"] if x["dish"] == "Fish tacos")
+    assert tacos["cost_after"] > tacos["cost_before"] and tacos["margin_after"] < tacos["margin_before"]
+    assert v["anticipated_cents"] == 5500                       # the disputed short stays anticipated, not counted
+    staff = blank.get("/api/scene", headers=H("fry_rosa")).json()
+    assert staff["shows_costs"] is False and "paid_cents" not in staff["invoices"][0] and staff["units"] == []

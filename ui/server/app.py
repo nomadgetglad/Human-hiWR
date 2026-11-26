@@ -33,7 +33,7 @@ from hiwr_access import level, can_see, LEVEL_NAMES
 from hiwr_contacts import approve, money_action_status, is_certified, check_in, my_day, update_assignment
 from hiwr_staff import staff_section, decide_hr, find_same_night, send_offers
 from hiwr_prep import prep_plan, make_batches
-from hiwr_stew import portions_left, cost_card, check_order_note, explode, sell
+from hiwr_stew import portions_left, cost_card, check_order_note, explode, sell, unit_cost
 from hiwr_warehouse import pull_list, record_pull
 from hiwr_roster import ADD_LEVEL, add_member, check_new_member, get_member, job_roles, roster
 import hiwr_auth as auth
@@ -672,6 +672,60 @@ def mesh_view(x_member: str = Header(None)):
                 "by_item": {k: [name(x) for x in v] for k, v in r["by_item"].items()},
                 "by_member": [{"member": k, "name": _first_name(d, k), "items": v} for k, v in r["by_member"].items()],
                 "best": {k: name(v) for k, v in r["best"].items()}}
+
+
+# ---------------- Demo scene: prior invoices settle the numbers ----------------
+# A guided walk-through on demo data: what was billed, what arrived, what was actually paid, and how that settles
+# the unit costs, food cost and margin the algorithms use. Short or disputed money stays "anticipated" until two
+# certified people approve a resolution. Read only: nothing here changes anything.
+
+@app.get("/api/scene")
+def scene(x_member: str = Header(None)):
+    with LOCK:
+        m = member(x_member)
+        if not STATE["sample"]:
+            raise HTTPException(404, "The demo scene runs on the demos only")
+        d = db()
+        costs_ok = can_see(d, m["id"], "order_costs")
+        inv = []
+        settled = {}     # material -> (paid cents, qty received) from settled invoices
+        anticipated = 0
+        for x in seed.PRIOR_INVOICES:
+            row = dict(x)
+            if x["status"] in ("paid", "paid_short"):
+                p, q = settled.get(x["material"], (0, 0))
+                settled[x["material"]] = (p + x["paid_cents"], q + x["received_qty"])
+                row["settles"] = True
+            else:
+                owed = round(x["billed_cents"] * x["received_qty"] / x["billed_qty"])
+                anticipated += x["billed_cents"] - owed
+                row["settles"] = False
+                row["anticipated_cents"] = x["billed_cents"] - owed
+            inv.append(row)
+        unit_before, unit_after = {}, {}
+        for mat, (paid, qty) in settled.items():
+            unit_before[mat] = unit_cost(d, mat)
+            unit_after[mat] = round(paid / qty, 2) if qty else unit_before[mat]
+        dishes = []
+        for r in d.execute("SELECT name, price_cents FROM recipes WHERE kind='dish' ORDER BY name"):
+            before = after = 0.0
+            for mat, (q, unit, via) in explode(d, r["name"]).items():
+                before += q * unit_cost(d, mat)
+                after += q * unit_after.get(mat, unit_cost(d, mat))
+            dishes.append({"dish": r["name"], "price": r["price_cents"], "cost_before": round(before), "cost_after": round(after),
+                           "margin_before": round(100 * (1 - before / r["price_cents"]), 1),
+                           "margin_after": round(100 * (1 - after / r["price_cents"]), 1)})
+        approvals = [{"scope": a["scope"], "amount": a["amount_cents"], "description": a["description"],
+                      "status": money_action_status(d, a["id"])} for a in d.execute("SELECT * FROM money_actions ORDER BY id")]
+        if not costs_ok:      # below Manager: the story without the dollars
+            for x in inv:
+                for k in ("billed_cents", "paid_cents", "anticipated_cents"):
+                    x.pop(k, None)
+            dishes = [{"dish": x["dish"]} for x in dishes]
+            approvals = [{"scope": a["scope"], "status": a["status"]} for a in approvals]
+        return {"shows_costs": costs_ok, "invoices": inv, "anticipated_cents": anticipated if costs_ok else None,
+                "units": [{"material": k, "before": unit_before[k], "after": unit_after[k]} for k in sorted(settled)] if costs_ok else [],
+                "dishes": dishes, "approvals": approvals}
 
 
 # ---------------- Team chat (HiWR -> Mesh) ----------------
