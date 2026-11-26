@@ -6,6 +6,7 @@ import { useProposals } from "./ConfirmCard";
 import { useT } from "./i18n";
 import { useData } from "./useData";
 import { TeamChat } from "./TeamChat";
+import { ChatBox } from "./ChatBox";
 import { ScanDialog } from "./Scan";
 import { sampleNote, sampleQr, sampleUpc } from "./samples";
 import { BUSINESSES, switchBusiness } from "./TopBar";
@@ -1048,43 +1049,17 @@ export function Assistant({ embedded = false, me }: { embedded?: boolean; me?: M
           ))}
         </div>
       )}
-      <div className="chat-log" aria-live="polite">
-        {msgs.map((m, i) => (
-          <div key={i} className={`chat-msg chat-${m.role}`}>
-            <span className="chat-who">{m.role === "user" ? t("You") : t("Assistant")}</span>
-            {m.text}
-          </div>
-        ))}
-        {busy && <div className="chat-msg chat-assistant muted">{t("Thinking… the first answer can take up to a minute.")}</div>}
-        <div ref={end} />
-      </div>
-      {error && (
-        <p className="panel panel-alert" role="alert">
-          {error}
-        </p>
-      )}
-      <form
-        className="chat-form"
-        onSubmit={(e) => {
-          e.preventDefault();
-          ask(text);
-        }}
-      >
-        <TextField className="field" value={text} onChange={setText} aria-label={t("Your question")}>
-          <Label>{t("Your question")}</Label>
-          <TextArea
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                ask(text);
-              }
-            }}
-          />
-        </TextField>
-        <Button type="submit" className="btn btn-primary" isDisabled={busy || !text.trim()}>
-          {t("Ask")}
-        </Button>
-      </form>
+      <ChatBox
+        lines={msgs.map((m, i) => ({ key: i, who: t("Assistant"), text: m.text, mine: m.role === "user" }))}
+        text={text}
+        setText={setText}
+        onSend={ask}
+        busy={busy}
+        busyText={t("Thinking… the first answer can take up to a minute.")}
+        placeholder={t("Your question")}
+        error={error}
+        empty={<></>}
+      />
     </section>
   );
 }
