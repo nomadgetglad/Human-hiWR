@@ -1,4 +1,5 @@
 """Adding staff: who may add whom, at what level, with what pay. Unit tests on hiwr_roster and attacks through the UI API."""
+import json
 import sqlite3
 
 import pytest
@@ -147,3 +148,57 @@ def test_last_name_refused_through_the_ui(c):
 
 def test_bad_level_type_is_400_not_500(c):
     assert add(c, "owner_alex", first_name="Maria", title="Cook", level="boss").status_code == 400
+
+
+# ---------- a new account starts empty (no test data) ----------
+
+@pytest.fixture
+def blank():
+    appmod.reset(sample=False)
+    yield TestClient(appmod.app, raise_server_exceptions=False)
+    appmod.reset()
+
+
+def test_blank_account_is_just_the_owner(blank):
+    assert [m["id"] for m in blank.get("/api/members").json()] == ["owner_alex"]
+    assert blank.get("/api/me", headers=H("chef_marco")).status_code == 401
+    me = blank.get("/api/me", headers=H("owner_alex")).json()
+    assert me["level"] == 4 and me["sample"] is False and me["menu"][0]["id"] == "team"
+
+
+@pytest.mark.parametrize("path", ["/api/topbar", "/api/team", "/api/tasks", "/api/staff", "/api/prep", "/api/inventory/stew",
+                                  "/api/inventory/warehouse", "/api/inventory/lab", "/api/cs/dishes", "/api/accounting/money-actions"])
+def test_every_screen_works_empty(blank, path):
+    assert blank.get(path, headers=H("owner_alex")).status_code == 200
+
+
+def test_blank_has_no_sample_numbers(blank):
+    bar = blank.get("/api/topbar", headers=H("owner_alex")).json()
+    assert all(s["value"] == 0 for s in bar["stats"]) and bar["notifications"] == []
+    assert "reservations" not in json.dumps(bar)
+    blank.post("/api/demo/clock", json={"hour": 20}, headers=H("owner_alex"))
+    assert appmod.db().execute("SELECT COUNT(*) FROM dish_sales").fetchone()[0] == 0
+
+
+def test_first_step_on_a_blank_account_is_adding_staff(blank):
+    assert add(blank, "owner_alex", first_name="Maria", title="Cook", role="cook", hourly_cents=1600).status_code == 200
+    assert blank.get("/api/me", headers=H("cook_maria")).json()["name"] == "Maria"
+    assert "dishwasher" in blank.get("/api/team", headers=H("owner_alex")).json()["roles"]
+
+
+def test_owner_switches_between_blank_and_sample(blank):
+    assert blank.post("/api/demo/reset?sample=true", headers=H("owner_alex")).json()["sample"] is True
+    assert len(blank.get("/api/members").json()) == 6
+    assert blank.post("/api/demo/reset?sample=false", headers=H("chef_marco")).status_code == 403
+    assert blank.post("/api/demo/reset?sample=false", headers=H("owner_alex")).json()["sample"] is False
+
+
+def test_your_team_survives_a_restart(tmp_path, monkeypatch):
+    monkeypatch.setattr(appmod, "DB_PATH", str(tmp_path / "human.db"))
+    appmod.reset(sample=False)
+    c = TestClient(appmod.app, raise_server_exceptions=False)
+    assert add(c, "owner_alex", first_name="Maria", title="Cook").status_code == 200
+    appmod.reset(sample=True)            # switch to the test restaurant and back: nothing of yours is lost
+    appmod.reset(sample=False)
+    assert [m["id"] for m in c.get("/api/members").json()] == ["owner_alex", "cook_maria"]
+    appmod.reset()

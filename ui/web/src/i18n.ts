@@ -77,6 +77,7 @@ const es: Record<string, string> = {
   Team: "Equipo",
   "Your team": "Tu equipo",
   "people on the roster": "personas en la lista",
+  "person on the roster": "persona en la lista",
   "Add staff": "Agregar personal",
   "First name": "Nombre",
   "Job title": "Puesto",
@@ -95,6 +96,9 @@ const es: Record<string, string> = {
   "First name only. They start at level 0 (Staff); only the account holder raises a level.":
     "Solo el nombre. Empiezan en nivel 0 (Personal); solo el titular de la cuenta sube el nivel.",
   "The team roster needs Manager level.": "La lista del equipo requiere nivel Gerente.",
+  "No stations set up yet.": "Todavía no hay estaciones.",
+  "Start here: add the people who work with you.": "Empieza aquí: agrega a las personas que trabajan contigo.",
+  "No staffing needs set up yet.": "Todavía no hay necesidades de personal.",
 };
 
 export type Lang = "en" | "es";

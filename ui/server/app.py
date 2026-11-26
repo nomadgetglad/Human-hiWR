@@ -14,6 +14,7 @@ Rules this layer keeps:
 Sign-in is a sample switcher (X-Member header). Real sign-in comes later.
 """
 import itertools
+import os
 import threading
 from pathlib import Path
 
@@ -39,15 +40,25 @@ _ids = itertools.count(1)
 PREP_ITEM = "fried tortilla chips"
 
 
-def reset():
+# Your own data (no test data) is kept in this file; the test restaurant lives in memory only
+DB_PATH = os.environ.get("HUMAN_DB", str(Path(__file__).resolve().parents[1] / "human.db"))
+
+
+def reset(sample=True):
+    """sample=True loads the test restaurant (tests and demos), in memory. sample=False opens your own
+    account from DB_PATH: empty the first time, and whatever you added since then after that."""
     with LOCK:
+        if STATE.get("db") is not None:
+            STATE["db"].close()
         STATE.clear()
         PROPOSALS.clear()
-        STATE["db"] = seed.build()
+        STATE["db"] = seed.build() if sample else seed.build_blank(DB_PATH)
+        STATE["sample"] = sample
         STATE["clock"] = 16          # prep clock hour, sample
 
 
-reset()
+# Starts empty (no test data) unless HUMAN_DATA=sample is set before starting the server
+reset(sample=os.environ.get("HUMAN_DATA", "blank").lower() == "sample")
 
 
 def db():
@@ -92,15 +103,19 @@ def me(x_member: str = Header(None)):
         if m["level"] >= 3:
             menu.append({"id": "accounting", "label": "Accounting"})
         open_cards = sum(1 for p in PROPOSALS.values() if p["actor"] == m["id"] and p["state"] == "open")
-        return {**m, "menu": menu, "today": seed.TODAY, "clock": STATE["clock"], "open_cards": open_cards}
+        return {**m, "menu": menu, "today": seed.TODAY, "clock": STATE["clock"], "open_cards": open_cards,
+                "sample": STATE["sample"]}
 
 
 @app.post("/api/demo/reset")
-def demo_reset(x_member: str = Header(None)):
+def demo_reset(sample: bool | None = None, x_member: str = Header(None)):
+    """Account holder only. ?sample=true switches to the test restaurant, ?sample=false to your own (saved) account.
+    Nothing is deleted: your own account file is only opened, never wiped."""
     with LOCK:
-        need(member(x_member), 4, "Resetting the sample data")
-    reset()
-    return {"ok": True}
+        need(member(x_member), 4, "Resetting the data")
+        keep = STATE["sample"]
+    reset(keep if sample is None else sample)
+    return {"ok": True, "sample": STATE["sample"]}
 
 
 class Clock(BaseModel):
@@ -115,7 +130,8 @@ def demo_clock(c: Clock, x_member: str = Header(None)):
         if not (STATE["clock"] <= c.hour <= 22):
             raise HTTPException(400, f"The clock only moves forward, from {STATE['clock']}:00 to 22:00")
         STATE["clock"] = c.hour
-        seed.add_today_sales(db(), c.hour)
+        if STATE["sample"]:            # sample POS sales only exist in the test restaurant
+            seed.add_today_sales(db(), c.hour)
         return {"clock": c.hour}
 
 
@@ -133,7 +149,7 @@ def _revenue(d, day, upto=24):
 def _forecast_revenue(d, upto=24):
     """Same weekday, last 4 weeks, dinner scaled by tonight's reservations vs usual."""
     from datetime import date, timedelta
-    scale = seed.RESERVATIONS / seed.USUAL_RESERVATIONS
+    scale = seed.RESERVATIONS / seed.USUAL_RESERVATIONS if STATE["sample"] else 1.0
     total = 0.0
     for w in range(1, 5):
         day = (date.fromisoformat(seed.TODAY) - timedelta(weeks=w)).isoformat()
@@ -161,7 +177,11 @@ def topbar(x_member: str = Header(None)):
             rev, fc_now, fc_day = _revenue(d, seed.TODAY, h), _forecast_revenue(d, h), _forecast_revenue(d)
             stats = [{"label": "Revenue today", "value": rev, "format": "usd",
                       "detail": f"{round(rev / fc_now * 100) if fc_now else 0}% of forecast so far"},
-                     {"label": "Forecast tonight", "value": fc_day, "format": "usd", "detail": f"{seed.RESERVATIONS} reservations vs usual {seed.USUAL_RESERVATIONS}"}]
+                     {"label": "Forecast tonight", "value": fc_day, "format": "usd",
+                      "detail": f"{seed.RESERVATIONS} reservations vs usual {seed.USUAL_RESERVATIONS}" if STATE["sample"]
+                      else ("same day, last 4 weeks" if fc_day else "no sales history yet")}]
+            if not fc_now:
+                stats[0]["detail"] = "no sales yet" if not rev else "no forecast yet"
         elif lvl >= 2:        # managers: labor. Finance level sees dollars; level 2 sees % and hours only
             n, hours, cents = _labor(d)
             fc_day = _forecast_revenue(d)
@@ -182,7 +202,7 @@ def topbar(x_member: str = Header(None)):
             for t in my_day(d, m["id"], seed.TODAY):
                 if t["status"] != "done":
                     notes.append({"kind": "task", "text": t["title"], "go": "tasks", "id": t["id"]})
-        if d.execute("SELECT 1 FROM staff WHERE member=? AND role='cook'", (m["id"],)).fetchone() or lvl >= 2:
+        if _has_prep(d) and (d.execute("SELECT 1 FROM staff WHERE member=? AND role='cook'", (m["id"],)).fetchone() or lvl >= 2):
             p = prep_plan(d, PREP_ITEM, now_iso(), seed.RESERVATIONS, seed.USUAL_RESERVATIONS)
             if p["fry_batches_now"]:
                 notes.append({"kind": "prep", "text": f"Fryer: fry {p['fry_batches_now']} batch(es) of chips now", "go": "prep"})
@@ -227,7 +247,8 @@ def team(x_member: str = Header(None)):
         m = member(x_member)
         need(m, 2, "The team roster")
         d = db()
-        roles = sorted({r[0] for r in d.execute("SELECT role FROM staffing_rules UNION SELECT role FROM staff")})
+        roles = sorted({r[0] for r in d.execute("SELECT role FROM staffing_rules UNION SELECT role FROM staff")}
+                       | {"cook", "dishwasher", "server", "host", "bartender", "prep"})
         return {"members": roster(d, show_pay=m["level"] >= 3), "can_set_level": m["level"] >= 4,
                 "can_set_pay": m["level"] >= 3, "roles": roles}
 
@@ -273,11 +294,17 @@ def staff_fill(role: str, x_member: str = Header(None)):
 
 # ---------------- Prep (station) ----------------
 
+def _has_prep(d):
+    return d.execute("SELECT 1 FROM prep_items WHERE item=?", (PREP_ITEM,)).fetchone() is not None
+
+
 @app.get("/api/prep")
 def prep(x_member: str = Header(None)):
     with LOCK:
         member(x_member)
         d = db()
+        if not _has_prep(d):
+            return {"empty": True}
         p = prep_plan(d, PREP_ITEM, now_iso(), seed.RESERVATIONS, seed.USUAL_RESERVATIONS)
         item = dict(d.execute("SELECT * FROM prep_items WHERE item=?", (PREP_ITEM,)).fetchone())
         batches = [dict(r) for r in d.execute("SELECT made_at, qty, member FROM prep_batches WHERE item=? ORDER BY made_at DESC LIMIT 8", (PREP_ITEM,))]

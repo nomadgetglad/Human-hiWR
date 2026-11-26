@@ -19,7 +19,14 @@ python -m uvicorn server.app:app --host 0.0.0.0 --port 8000
 Open http://localhost:8000 on the desktop, or http://<desktop-ip>:8000 on a tablet. For live editing run
 `npm run dev` in `web/` (port 5173) with the server running.
 
-Handy links: `?as=fry_rosa&screen=prep&lang=es`, `?as=owner_alex`, `?as=manager_jo&screen=accounting`.
+It starts as **your own account with no test data**: just the account holder, and adding staff is the first step.
+What you add is saved in `ui/human.db` (not in git), so it is still there after a restart.
+
+To use the sample restaurant instead (the tests and screenshots use it), start the server with `HUMAN_DATA=sample`.
+In PowerShell: `$env:HUMAN_DATA="sample"` before the uvicorn line; `Remove-Item Env:HUMAN_DATA` to go back.
+The account holder can also switch with `POST /api/demo/reset?sample=true` or `?sample=false`; neither deletes anything.
+
+Handy links (sample restaurant): `?as=fry_rosa&screen=prep&lang=es`, `?as=owner_alex`, `?as=manager_jo&screen=accounting`.
 
 ## What is in it
 
@@ -54,7 +61,7 @@ and did it do what you meant. Money cards are marked "PENDING - requires double 
 ## Not done yet
 
 - Real sign-in. The member picker in the top bar is a sample switcher (it sends `X-Member`).
-- The database is in memory and resets when the server restarts (`POST /api/demo/reset` too).
+- Your own account is saved in `ui/human.db`. The sample restaurant is in memory and resets when the server restarts.
 - Lab screens, payroll runs, ordering and the accounting summary screens.
 - Spanish for server-written text; a local model could translate those.
 - The offline shell (service worker) only works over https or on localhost.

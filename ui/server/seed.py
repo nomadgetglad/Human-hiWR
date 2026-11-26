@@ -53,6 +53,17 @@ def add_today_sales(db, upto_hour):
                 db.execute("INSERT INTO dish_sales VALUES (?,?,?,?)", (TODAY, h, dish, round(q * (BUSY_BOOST if h >= 18 else 1.0))))
 
 
+def build_blank(path=":memory:"):
+    """Your own account, no test data. Kept in a file, so the team you add is still there after a restart.
+    A new file starts with just the account holder: adding the team is the first step."""
+    db = connect(path, check_same_thread=False)
+    if not db.execute("SELECT 1 FROM plan_owners LIMIT 1").fetchone():
+        add_plan_owner(db, OWNER, "setup")
+        add_member(db, "Alex", "Owner", OWNER, member_id=OWNER, reason="account created")
+        db.commit()
+    return db
+
+
 def build():
     random.seed(7)
     # FastAPI runs endpoints in a thread pool; one lock in app.py keeps access to this connection serial

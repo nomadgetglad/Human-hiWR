@@ -18,10 +18,13 @@ function App() {
 
   useEffect(() => {
     setMember(who);
-    api<Me>("/api/me").then((m) => {
-      setMe(m);
-      setLang((new URLSearchParams(location.search).get("lang") as Lang) ?? m.language);
-    });
+    api<Me>("/api/me")
+      .then((m) => {
+        setMe(m);
+        setLang((new URLSearchParams(location.search).get("lang") as Lang) ?? m.language);
+      })
+      // not on this roster (e.g. a new, empty account): sign in as the first person on it
+      .catch(() => api<Member[]>("/api/members").then((ms) => ms.length && ms[0].id !== who && setWho(ms[0].id)));
   }, [who]);
   useEffect(() => {
     if (toast) {

@@ -19,8 +19,9 @@ export function Home({ me, go }: { me: Me; go: (s: string) => void }) {
           <div>
             <h2 className="h2">{t("Your team")}</h2>
             <p className="kpi">
-              <b>{team.members.length}</b> <span className="muted">{t("people on the roster")}</span>
+              <b>{team.members.length}</b> <span className="muted">{t(team.members.length === 1 ? "person on the roster" : "people on the roster")}</span>
             </p>
+            {team.members.length < 2 && <p className="muted small">{t("Start here: add the people who work with you.")}</p>}
           </div>
           <Button className="btn btn-primary" onPress={() => go("team")}>
             {t("Add staff")}
@@ -195,6 +196,7 @@ export function Staff() {
       <h1 className="h1">
         {t("Staff")} · {t("Tonight")} <span className="muted">{v.demand.covers} covers</span>
       </h1>
+      {v.roles.length === 0 && <p className="muted">{t("No staffing needs set up yet.")}</p>}
       <div className="grid-2">
         {v.roles.map((r: any) => (
           <div key={r.role} className={`panel ${r.short ? "panel-alert" : ""}`}>
@@ -305,6 +307,13 @@ export function Prep() {
   const { propose, refresh } = useProposals();
   const p = useData<any>("/api/prep");
   if (!p) return null;
+  if (p.empty)
+    return (
+      <section>
+        <h1 className="h1">{t("My station")}</h1>
+        <p className="muted">{t("No stations set up yet.")}</p>
+      </section>
+    );
   const hhmm = (h: number) => `${((h + 11) % 12) + 1}:00 ${h >= 12 ? "PM" : "AM"}`;
   const move = async (h: number) => {
     await api("/api/demo/clock", { hour: h });
