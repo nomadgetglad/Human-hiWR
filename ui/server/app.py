@@ -904,7 +904,8 @@ def scan_lookup(q: ScanLookup, x_member: str = Header(None)):
         for r in d.execute("SELECT id, type, status, subject FROM tickets WHERE id=? COLLATE NOCASE OR subject LIKE ? LIMIT 10",
                            (code, like)):
             out.append({"type": "Ticket", "id": r["id"], "title": r["subject"], "detail": f"{r['type']} · {r['status']}"})
-        for r in d.execute("SELECT name, kind FROM recipes WHERE name LIKE ? LIMIT 10", (like,)):
+        for r in d.execute("SELECT name, kind FROM recipes WHERE name LIKE ? OR (kind='dish' AND ? LIKE '%' || name || '%') "
+                           "LIMIT 10", (like, code)):
             out.append({"type": "Dish" if r["kind"] == "dish" else "Recipe", "id": r["name"], "title": r["name"],
                         "detail": r["kind"]})
         return {"matches": out}

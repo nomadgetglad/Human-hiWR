@@ -47,7 +47,7 @@ async function readText(url: string): Promise<Found | null> {
   }
 }
 
-export function ScanDialog({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+export function ScanDialog({ isOpen, onClose, sample }: { isOpen: boolean; onClose: () => void; sample?: string | null }) {
   const t = useT();
   const [photo, setPhoto] = useState<string | null>(null);
   const [status, setStatus] = useState("");
@@ -72,7 +72,8 @@ export function ScanDialog({ isOpen, onClose }: { isOpen: boolean; onClose: () =
   };
   useEffect(() => {
     if (!isOpen) reset();
-  }, [isOpen]);
+    else if (sample) analyze(sample);
+  }, [isOpen, sample]);
 
   const analyze = async (url: string, textToo = false) => {
     setPhoto(url);

@@ -6,6 +6,8 @@ import { useProposals } from "./ConfirmCard";
 import { useT } from "./i18n";
 import { useData } from "./useData";
 import { TeamChat } from "./TeamChat";
+import { ScanDialog } from "./Scan";
+import { sampleNote, sampleQr, sampleUpc } from "./samples";
 import { BUSINESSES, switchBusiness } from "./TopBar";
 import { IdIntake, IdView } from "./IdCard";
 
@@ -19,6 +21,7 @@ export function Home({ me, go }: { me: Me; go: (s: string) => void }) {
   return (
     <section>
       <Assistant embedded me={me} />
+      {me.sample && <DemoTry me={me} go={go} />}
       {me.sample && (
         <div className="panel row-between">
           <div>
@@ -73,6 +76,79 @@ export function Home({ me, go }: { me: Me; go: (s: string) => void }) {
         ))}
       </div>
     </section>
+  );
+}
+
+// ---------------- Demo: "Try it" with ready-made examples ----------------
+// Scan orders, replenish stock and feed Human, on demo data. Every change still goes through a confirm card.
+function DemoTry({ me, go }: { me: Me; go: (s: string) => void }) {
+  const t = useT();
+  const { propose } = useProposals();
+  const [sample, setSample] = useState<string | null>(null);
+  const [scanOpen, setScanOpen] = useState(false);
+  const pulls = useData<any>(me.menu.some((m) => m.children?.includes("warehouse")) ? "/api/inventory/warehouse" : null);
+  const dishes = useData<string[]>(me.menu.some((m) => m.id === "cs") ? "/api/cs/dishes" : null) ?? [];
+  const hasPrep = me.menu.some((m) => m.id === "prep");
+  const canManage = me.level >= 2;
+  const scan = async (make: () => Promise<string> | string) => {
+    setSample(await make());
+    setScanOpen(true);
+  };
+  const firstPull = pulls?.pull_list?.find((p: any) => p.pull > 0);
+  const tonight = dishes.slice(0, 3).map((d, i) => ({ item: d, qty: [6, 4, 3][i], hour: 19 }));
+  return (
+    <div className="panel demo-try">
+      <h2 className="h2">🧪 {t("Try it on the demo")}</h2>
+      <p className="muted small">{t("Ready-made examples. Nothing changes until you confirm, and demos reset.")}</p>
+      <div className="try-grid">
+        <div>
+          <h3 className="h3">📷 {t("Scan orders")}</h3>
+          {dishes.length > 0 && (
+            <Button className="btn btn-sm btn-wide" onPress={() => scan(() => sampleQr(`ORDER POS-1207 table 12: 2 ${dishes[0]}, 1 ${dishes[1] ?? dishes[0]}`))}>
+              {t("An order ticket (QR code)")}
+            </Button>
+          )}
+          <Button className="btn btn-sm btn-wide" onPress={() => scan(() => sampleUpc("036000291452"))}>
+            {t("A product label (UPC)")}
+          </Button>
+          <Button className="btn btn-sm btn-wide" onPress={() => scan(() => sampleNote(["Sysco INV-8812", "White fish 160 oz", "Received 60 oz"]))}>
+            {t("A delivery note (text)")}
+          </Button>
+        </div>
+        <div>
+          <h3 className="h3">📦 {t("Replenish stock")}</h3>
+          {firstPull && (
+            <Button className="btn btn-sm btn-wide" onPress={() => propose("pull", { sku: firstPull.sku, qty: firstPull.pull })}>
+              {t("Pull to the floor")}: {firstPull.item} ×{firstPull.pull}
+            </Button>
+          )}
+          {hasPrep && (
+            <Button className="btn btn-sm btn-wide" onPress={() => propose("fry", { batches: 2 })}>
+              {t("Fry 2 batches of chips")}
+            </Button>
+          )}
+          <Button className="btn btn-sm btn-wide" onPress={() => go("inventory")}>
+            {t("See what's low")}
+          </Button>
+          {!firstPull && !hasPrep && <p className="muted small">{t("This demo has no shelves or fryer to restock.")}</p>}
+        </div>
+        <div>
+          <h3 className="h3">🍽 {t("Feed Human")}</h3>
+          {canManage && tonight.length > 0 && (
+            <Button className="btn btn-sm btn-wide" onPress={() => propose("import_sales", { rows: tonight })}>
+              {t("Import tonight's register sales")}
+            </Button>
+          )}
+          <Button className="btn btn-sm btn-wide" onPress={() => go("mesh")}>
+            {t("Post to the team in Mesh")}
+          </Button>
+          <Button className="btn btn-sm btn-wide" onPress={() => document.querySelector<HTMLTextAreaElement>(".assistant-home textarea")?.focus()}>
+            {t("Ask the assistant (top of Home)")}
+          </Button>
+        </div>
+      </div>
+      <ScanDialog isOpen={scanOpen} sample={sample} onClose={() => { setScanOpen(false); setSample(null); }} />
+    </div>
   );
 }
 

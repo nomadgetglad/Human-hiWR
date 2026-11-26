@@ -445,3 +445,8 @@ def test_scene_settles_costs_from_paid_invoices(blank):
     assert v["anticipated_cents"] == 5500                       # the disputed short stays anticipated, not counted
     staff = blank.get("/api/scene", headers=H("fry_rosa")).json()
     assert staff["shows_costs"] is False and "paid_cents" not in staff["invoices"][0] and staff["units"] == []
+
+
+def test_scanned_order_ticket_finds_its_dishes(c):
+    r = c.post("/api/scan/lookup", json={"code": "ORDER POS-1207 table 12: 2 Fish tacos, 1 House burger"}, headers=H("chef_marco")).json()
+    assert {"Fish tacos", "House burger"} <= {m["id"] for m in r["matches"]}

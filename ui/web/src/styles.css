@@ -286,6 +286,11 @@ button { font: inherit; }
 .brand > img { border-radius: 50%; }
 .brand-text > span:first-child { color: var(--human-c); }
 
+/* ---------- Demo: Try it ---------- */
+.try-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+.try-grid .btn { margin-bottom: 8px; justify-content: flex-start; text-align: left; }
+.demo-try { border-color: var(--hiwr-c, var(--accent)); }
+
 /* ---------- Team chat (Mesh) ---------- */
 .tc-wrap { display: grid; grid-template-columns: minmax(160px, 220px) 1fr; gap: 14px; }
 .tc-list { display: flex; flex-direction: column; gap: 6px; max-height: 50vh; overflow-y: auto; }
