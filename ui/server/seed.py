@@ -11,7 +11,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "hiwr"))
 
 from hiwr_contacts import connect, add_plan_owner, add_contact, certify, request_money_action  # noqa: E402
-from hiwr_access import set_level, grant_task  # noqa: E402
+from hiwr_access import grant_task  # noqa: E402
+from hiwr_roster import add_member  # noqa: E402
 from hiwr_staff import hr_request, decide_hr  # noqa: E402
 from hiwr_prep import make_batches  # noqa: E402
 from hiwr_stew import sell, receive_short  # noqa: E402
@@ -20,7 +21,7 @@ from hiwr_processes import open_ticket, ticket_priority  # noqa: E402
 TODAY = "2026-11-20"
 OWNER = "owner_alex"
 
-# Who can sign in to the sample. Level is set by the account holder only (see hiwr_access).
+# The sample roster, added through hiwr_roster like anyone else. Level is set by the account holder only.
 MEMBERS = [
     {"id": "owner_alex", "name": "Alex", "title": "Owner", "level": 4, "language": "en"},
     {"id": "chef_marco", "name": "Marco", "title": "Chef", "level": 2, "language": "en"},
@@ -52,14 +53,25 @@ def add_today_sales(db, upto_hour):
                 db.execute("INSERT INTO dish_sales VALUES (?,?,?,?)", (TODAY, h, dish, round(q * (BUSY_BOOST if h >= 18 else 1.0))))
 
 
+def build_blank(path=":memory:"):
+    """Your own account, no test data. Kept in a file, so the team you add is still there after a restart.
+    A new file starts with just the account holder: adding the team is the first step."""
+    db = connect(path, check_same_thread=False)
+    if not db.execute("SELECT 1 FROM plan_owners LIMIT 1").fetchone():
+        add_plan_owner(db, OWNER, "setup")
+        add_member(db, "Alex", "Owner", OWNER, member_id=OWNER, reason="account created")
+        db.commit()
+    return db
+
+
 def build():
     random.seed(7)
     # FastAPI runs endpoints in a thread pool; one lock in app.py keeps access to this connection serial
     db = connect(check_same_thread=False)
     add_plan_owner(db, OWNER, "setup")
-    for m in MEMBERS:
-        if m["level"] < 4:
-            set_level(db, m["id"], m["level"], OWNER)
+    for m in MEMBERS:     # the roster comes first: everything else hangs off the people who work here
+        add_member(db, m["name"], m["title"], OWNER, m["language"], 0 if m["level"] >= 4 else m["level"], member_id=m["id"],
+                   reason="sample roster")
     for m in ("manager_jo", "accounting_sue"):
         for scope in ("payroll", "refund"):
             certify(db, m, scope, OWNER)
