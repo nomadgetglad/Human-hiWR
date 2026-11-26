@@ -3,3 +3,8 @@ __pycache__/
 *.db
 .pytest_cache/
 *.key
+
+# Secrets: Stripe keys and admin tokens live here, never in git
+.env
+*.env
+!.env.example
