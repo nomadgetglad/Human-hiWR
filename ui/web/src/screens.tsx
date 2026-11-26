@@ -4,15 +4,31 @@ import { api, usd, type Me } from "./api";
 import { useProposals } from "./ConfirmCard";
 import { useT } from "./i18n";
 import { useData } from "./useData";
+import { IdIntake, IdView } from "./IdCard";
 
-const TILE_ICON: Record<string, string> = { staff: "👥", inventory: "📦", prep: "🔥", cs: "💬", accounting: "📒", tasks: "☐" };
+const TILE_ICON: Record<string, string> = { team: "🧑‍🤝‍🧑", staff: "👥", inventory: "📦", prep: "🔥", cs: "💬", accounting: "📒", tasks: "☐" };
 
 // ---------------- Home: the main menu ----------------
 export function Home({ me, go }: { me: Me; go: (s: string) => void }) {
   const t = useT();
   const items = [...me.menu, ...(me.level < 2 ? [{ id: "tasks", label: "My tasks" }] : [])];
+  const team = useData<{ members: any[] }>(me.level >= 2 ? "/api/team" : null);
   return (
     <section>
+      {team && (
+        <div className="panel team-start row-between">
+          <div>
+            <h2 className="h2">{t("Your team")}</h2>
+            <p className="kpi">
+              <b>{team.members.length}</b> <span className="muted">{t(team.members.length === 1 ? "person on the roster" : "people on the roster")}</span>
+            </p>
+            {team.members.length < 2 && <p className="muted small">{t("Start here: add the people who work with you.")}</p>}
+          </div>
+          <Button className="btn btn-primary" onPress={() => go("team")}>
+            {t("Add staff")}
+          </Button>
+        </div>
+      )}
       <h1 className="h1">{t("Choose a section")}</h1>
       <div className="tiles">
         {items.map((m) => (
@@ -25,6 +41,173 @@ export function Home({ me, go }: { me: Me; go: (s: string) => void }) {
         ))}
       </div>
     </section>
+  );
+}
+
+// ---------------- Team: adding staff is where the app starts ----------------
+const LEVELS = ["Staff", "Lead", "Manager", "Finance"];
+
+export function Team() {
+  const t = useT();
+  const { propose } = useProposals();
+  const v = useData<{ members: any[]; can_set_level: boolean; can_set_pay: boolean; can_view_id: boolean; roles: string[]; doc_types: Record<string, string> }>("/api/team");
+  const [idFor, setIdFor] = useState<{ id: string; name: string; view: boolean } | null>(null);
+  const [first, setFirst] = useState("");
+  const [title, setTitle] = useState("");
+  const [language, setLanguage] = useState("en");
+  const [lvl, setLvl] = useState("0");
+  const [role, setRole] = useState("none");
+  const [rate, setRate] = useState("");
+  if (!v) return <p className="muted">{t("The team roster needs Manager level.")}</p>;
+  const add = () => {
+    const params: Record<string, any> = { first_name: first, title, language, level: Number(lvl) };
+    if (v.can_set_pay && role !== "none") {
+      params.role = role;
+      params.hourly_cents = Math.round(Number(rate) * 100);
+    }
+    propose("add_member", params);
+  };
+  return (
+    <section>
+      <h1 className="h1">{t("Team")}</h1>
+      <div className="panel">
+        <h2 className="h2">{t("Add staff")}</h2>
+        <p className="muted small">{t("First name only. They start at level 0 (Staff); only the account holder raises a level.")}</p>
+        <div className="form-row">
+          <TextField className="field" value={first} onChange={setFirst} isRequired>
+            <Label>{t("First name")}</Label>
+            <Input autoComplete="off" />
+          </TextField>
+          <TextField className="field" value={title} onChange={setTitle} isRequired>
+            <Label>{t("Job title")}</Label>
+            <Input placeholder="Cook, grill" />
+          </TextField>
+          <Pick
+            label={t("Language")}
+            value={language}
+            onChange={setLanguage}
+            options={[
+              ["en", "English"],
+              ["es", "Español"],
+            ]}
+          />
+          {v.can_set_level && <Pick label={t("Level")} value={lvl} onChange={setLvl} options={LEVELS.map((n, i) => [String(i), `${i} ${t(n)}`])} />}
+          {v.can_set_pay && (
+            <>
+              <Pick label={t("Schedule role")} value={role} onChange={setRole} options={[["none", t("Not on the schedule")], ...v.roles.map((r) => [r, r])]} />
+              {role !== "none" && (
+                <TextField className="field" value={rate} onChange={setRate} inputMode="decimal">
+                  <Label>{t("Pay ($/hour)")}</Label>
+                  <Input placeholder="16.00" />
+                </TextField>
+              )}
+            </>
+          )}
+          <Button className="btn btn-primary" onPress={add} isDisabled={!first.trim() || !title.trim()}>
+            {t("Add")}
+          </Button>
+        </div>
+      </div>
+      {idFor &&
+        (idFor.view ? (
+          <IdView key={idFor.id} member={idFor.id} name={idFor.name} onClose={() => setIdFor(null)} />
+        ) : (
+          <IdIntake key={idFor.id} member={idFor.id} name={idFor.name} docTypes={v.doc_types} onClose={() => setIdFor(null)} />
+        ))}
+      <div className="panel">
+        <h2 className="h2">
+          {t("Roster")} <span className="muted">· {v.members.length}</span>
+        </h2>
+        <div className="table-wrap">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>{t("Name")}</th>
+                <th>{t("Job title")}</th>
+                <th>{t("Level")}</th>
+                <th>{t("Language")}</th>
+                <th>{t("Schedule role")}</th>
+                {v.can_set_pay && <th>{t("Pay")}</th>}
+                <th>{t("Sign-in")}</th>
+                <th>{t("ID")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {v.members.map((m) => (
+                <tr key={m.id}>
+                  <td>
+                    <b>{m.name}</b>
+                    <div className="muted small">{m.id}</div>
+                  </td>
+                  <td>{m.title}</td>
+                  <td>
+                    <span className="badge">
+                      L{m.level} {t(m.level_name)}
+                    </span>
+                  </td>
+                  <td>{m.language.toUpperCase()}</td>
+                  <td className="cap">{m.role ?? "—"}</td>
+                  {v.can_set_pay && <td>{m.hourly_cents ? `${usd(m.hourly_cents)}/h` : "—"}</td>}
+                  <td>
+                    <span className={`badge ${m.sign_in.enrolled ? "badge-ok" : ""}`}>
+                      {m.sign_in.enrolled ? t("Authenticator") : m.sign_in.setup_code_open ? t("Code given") : t("Not set up")}
+                    </span>
+                    {m.sign_in.last_sign_in && <div className="muted small">{m.sign_in.last_sign_in.replace("T", " ").slice(0, 16)}</div>}
+                    {m.can_issue_code && (
+                      <Button className="btn btn-ghost btn-sm" onPress={() => propose("setup_code", { member_id: m.id })}>
+                        {m.sign_in.enrolled ? t("Reset") : t("Setup code")}
+                      </Button>
+                    )}
+                  </td>
+                  <td>
+                    {m.id_card.on_file ? (
+                      <span className={`badge ${m.id_card.expiring ? "badge-warn" : "badge-ok"}`}>
+                        {t(m.id_card.doc_label)}
+                        {m.id_card.expires_on ? ` · ${m.id_card.expires_on}` : ""}
+                      </span>
+                    ) : (
+                      <span className="badge">{t("Not on file")}</span>
+                    )}
+                    {m.id_card.on_file && !m.id_card.work_auth_verified && <div className="muted small">{t("Work authorization not checked")}</div>}
+                    {v.can_view_id && m.id_card.on_file && (
+                      <Button className="btn btn-ghost btn-sm" onPress={() => setIdFor({ id: m.id, name: m.name, view: true })}>
+                        {t("Open")}
+                      </Button>
+                    )}
+                    {m.can_enter_id && (
+                      <Button className="btn btn-ghost btn-sm" onPress={() => setIdFor({ id: m.id, name: m.name, view: false })}>
+                        {m.id_card.on_file ? t("Update") : t("Add ID")}
+                      </Button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function Pick({ label, value, onChange, options }: { label: string; value: string; onChange: (v: string) => void; options: string[][] }) {
+  return (
+    <Select className="field" selectedKey={value} onSelectionChange={(k) => onChange(String(k))}>
+      <Label>{label}</Label>
+      <Button className="select-btn">
+        <SelectValue />
+        <span aria-hidden>▾</span>
+      </Button>
+      <Popover className="popover">
+        <ListBox className="listbox">
+          {options.map(([id, text]) => (
+            <ListBoxItem key={id} id={id} className="option" textValue={text}>
+              {text}
+            </ListBoxItem>
+          ))}
+        </ListBox>
+      </Popover>
+    </Select>
   );
 }
 
@@ -55,6 +238,7 @@ export function Staff() {
       <h1 className="h1">
         {t("Staff")} · {t("Tonight")} <span className="muted">{v.demand.covers} covers</span>
       </h1>
+      {v.roles.length === 0 && <p className="muted">{t("No staffing needs set up yet.")}</p>}
       <div className="grid-2">
         {v.roles.map((r: any) => (
           <div key={r.role} className={`panel ${r.short ? "panel-alert" : ""}`}>
@@ -165,6 +349,13 @@ export function Prep() {
   const { propose, refresh } = useProposals();
   const p = useData<any>("/api/prep");
   if (!p) return null;
+  if (p.empty)
+    return (
+      <section>
+        <h1 className="h1">{t("My station")}</h1>
+        <p className="muted">{t("No stations set up yet.")}</p>
+      </section>
+    );
   const hhmm = (h: number) => `${((h + 11) % 12) + 1}:00 ${h >= 12 ? "PM" : "AM"}`;
   const move = async (h: number) => {
     await api("/api/demo/clock", { hour: h });
