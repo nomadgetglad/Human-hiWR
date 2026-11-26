@@ -7,6 +7,7 @@ import { useT } from "./i18n";
 import { ScanDialog } from "./Scan";
 import { ImportDialog } from "./Import";
 import { RecallDialog } from "./Recall";
+import { AddDialog, Rotator } from "./Add";
 import { useData } from "./useData";
 
 type Stat = { label: string; value: number; format: "usd" | "pct" | "int"; detail: string };
@@ -18,13 +19,13 @@ const ICON: Record<string, string> = { task: "☐", prep: "🔥", staff: "👥",
 // Businesses the account holder can open. "Human" is the placeholder name for the trial demos: before a plan
 // is bought, a business tries the demo for its type (stock house, stew or lab). "Your business" is your own
 // saved account.
-export type Business = { key: string; demo: string | null; name: string; detail: string; icon: string };
+export type Business = { key: string; demo: string | null; name: string; detail: string; icon: string; examples?: string[] };
 export const BUSINESSES: Business[] = [
-  { key: "own", demo: null, name: "Your business", detail: "Your own team and data, saved on this PC", icon: "🏠" },
-  { key: "stock", demo: "stock", name: "Stock house demo", detail: "Warehouse and shelves: pull list, dates, stock moves", icon: "📦" },
-  { key: "stew", demo: "stew", name: "Stew demo", detail: "Restaurant: staff, fryer station, recipes, approvals", icon: "🍲" },
-  { key: "lab", demo: "lab", name: "Lab demo", detail: "Long jobs: a house build with phases, inspections, subs", icon: "🏗" },
-  { key: "portfolio", demo: "portfolio", name: "Portfolio demo", detail: "Pipe assembly, repair and service, a café, lots, appointments", icon: "📊" },
+  { key: "own", demo: null, name: "Your business", detail: "Your own team and data, saved on this PC", icon: "🏠", examples: ["your team", "your records", "your rules"] },
+  { key: "stock", demo: "stock", name: "Stock house demo", detail: "Warehouse and shelves: pull list, dates, stock moves", icon: "📦", examples: ["grocery store", "stocking list", "pull to the floor", "dates and rotation", "shelf par levels"] },
+  { key: "stew", demo: "stew", name: "Stew demo", detail: "Restaurant: staff, fryer station, recipes, approvals", icon: "🍲", examples: ["restaurant", "fryer station", "recipes and costs", "staff and call-outs", "table turns"] },
+  { key: "lab", demo: "lab", name: "Lab demo", detail: "Long jobs: a house build with phases, inspections, subs", icon: "🏗", examples: ["long jobs", "production lot", "production time", "staff workforce", "manager hierarchy", "inspections and subs"] },
+  { key: "portfolio", demo: "portfolio", name: "Portfolio demo", detail: "Pipe assembly, repair and service, a café, lots, appointments", icon: "📊", examples: ["pipe assembly", "pipes per hour", "repair and service", "lot tracking", "next client up", "late fees"] },
 ];
 
 export function currentBusiness(me: Me): Business {
@@ -78,7 +79,7 @@ function BusinessSwitcher({ me, go }: { me: Me; go: (s: string) => void }) {
                       <span>
                         <b>{t(b.name)}</b>
                         <span className="muted small" style={{ display: "block" }}>
-                          {t(b.detail)}
+                          {b.examples ? <Rotator items={b.examples} /> : t(b.detail)}
                         </span>
                       </span>
                     </Button>
@@ -154,6 +155,7 @@ function HiwrButton({ me, go }: { me: Me; go: (s: string) => void }) {
   const [scanning, setScanning] = useState(false);
   const [importing, setImporting] = useState(false);
   const [recalling, setRecalling] = useState(false);
+  const [adding, setAdding] = useState(false);
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
@@ -183,6 +185,9 @@ function HiwrButton({ me, go }: { me: Me; go: (s: string) => void }) {
                     if (a.id === "scan") {
                       setOpen(false);
                       setScanning(true);
+                    } else if (a.id === "add") {
+                      setOpen(false);
+                      setAdding(true);
                     } else if (a.id === "recall") {
                       setOpen(false);
                       setRecalling(true);
@@ -217,6 +222,7 @@ function HiwrButton({ me, go }: { me: Me; go: (s: string) => void }) {
       <ScanDialog isOpen={scanning} onClose={() => setScanning(false)} />
       <ImportDialog isOpen={importing} onClose={() => setImporting(false)} />
       <RecallDialog isOpen={recalling} onClose={() => setRecalling(false)} />
+      <AddDialog isOpen={adding} onClose={() => setAdding(false)} me={me} go={go} />
     </div>
   );
 }

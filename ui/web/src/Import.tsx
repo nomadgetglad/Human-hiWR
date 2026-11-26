@@ -6,6 +6,7 @@ import { Button, Dialog, Heading, Modal, ModalOverlay, TextArea, TextField, Labe
 import { api } from "./api";
 import { useProposals } from "./ConfirmCard";
 import { useT } from "./i18n";
+import { fileToText, linesToCsv } from "./readFile";
 
 type Row = { item: string; qty: number; hour?: number };
 
@@ -57,6 +58,8 @@ export function ImportDialog({ isOpen, onClose }: { isOpen: boolean; onClose: ()
   const { propose } = useProposals();
   const [text, setText] = useState("");
   const [name, setName] = useState("");
+  const [reading, setReading] = useState("");
+  const [unread, setUnread] = useState<string[]>([]);
   const file = useRef<HTMLInputElement>(null);
   const rows = parseSales(text);
 
@@ -84,25 +87,38 @@ export function ImportDialog({ isOpen, onClose }: { isOpen: boolean; onClose: ()
             📥 {t("Import sales")}
           </Heading>
           <p className="muted small">
-            {t("Bring in sales from your register (a CSV export: item or SKU/UPC, quantity, and the hour if you have it). Inventory is worked out from what was sold. You'll see a confirm card before anything changes.")}
+            {t("Bring in sales from your register: a CSV export, a PDF report, or a photo of a receipt or report (item or SKU/UPC, quantity, and the hour if you have it). Files are read on this device. Inventory is worked out from what was sold, and you'll see a confirm card before anything changes.")}
           </p>
           <input
             ref={file}
             type="file"
-            accept=".csv,text/csv,text/plain"
+            accept=".csv,.txt,.pdf,.png,.jpg,.jpeg,text/csv,text/plain,application/pdf,image/*"
             hidden
             onChange={async (e) => {
               const f = e.target.files?.[0];
-              if (f) {
-                setName(f.name);
-                setText(await f.text());
-              }
               e.target.value = "";
+              if (!f) return;
+              setName(f.name);
+              setUnread([]);
+              try {
+                setReading(t("Reading the file on this device…"));
+                const { text: raw, how } = await fileToText(f);
+                if (how === "csv") {
+                  setText(raw);
+                } else {
+                  const r = linesToCsv(raw);
+                  setText(r.csv);
+                  setUnread(r.unread);
+                }
+                setReading("");
+              } catch (err: any) {
+                setReading(`${t("Couldn't read that file")}: ${err.message ?? err}`);
+              }
             }}
           />
           <div className="row-gap">
             <Button className="btn btn-primary" onPress={() => file.current?.click()}>
-              {t("Choose a sales file")}
+              {t("Choose a sales file (CSV, PDF or photo)")}
             </Button>
             <Button className="btn" onPress={sample}>
               {t("Try a sample")}
@@ -112,6 +128,21 @@ export function ImportDialog({ isOpen, onClose }: { isOpen: boolean; onClose: ()
             <Label>{name || t("Or paste the lines here")}</Label>
             <TextArea rows={6} placeholder={"item,qty,hour\nFish tacos,4,19\nHouse burger,6,19"} />
           </TextField>
+          {reading && <p className="small" role="status">{reading}</p>}
+          {unread.length > 0 && (
+            <details className="small">
+              <summary>
+                {unread.length} {t("lines couldn't be read; check and add them by hand if they matter")}
+              </summary>
+              <ul>
+                {unread.slice(0, 20).map((u, i) => (
+                  <li key={i} className="muted">
+                    {u}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
           <p className="small" role="status">
             {rows.length ? `${rows.length} ${t("sales lines ready")} · ${rows.reduce((a, r) => a + r.qty, 0)} ${t("sold")}` : t("No sales lines yet")}
           </p>

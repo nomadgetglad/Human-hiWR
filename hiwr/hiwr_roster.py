@@ -107,6 +107,10 @@ def add_member(db, first_name, title, added_by, language="en", lvl=0, role=None,
 def job_roles(db):
     """The job roles to pick from: the standard list plus any title already on the roster."""
     have = {r[0] for r in db.execute("SELECT DISTINCT title FROM members") if r[0] and r[0] != "Owner"}
+    try:
+        have |= {r[0] for r in db.execute("SELECT role FROM job_role_defs")}
+    except Exception:          # sqlite3.OperationalError: no added roles yet
+        pass
     return sorted(set(JOB_ROLES) | have, key=str.lower)
 
 

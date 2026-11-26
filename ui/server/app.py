@@ -41,6 +41,8 @@ import hiwr_notices as notices_mod
 import hiwr_taxdocs as taxdocs
 import hiwr_portfolio as pf
 import hiwr_recall as recall
+import hiwr_training as training
+import hiwr_sensitivity as sens
 import hiwr_idintake as idin
 from hiwr_vault import Vault
 
@@ -166,6 +168,14 @@ def reset(sample=True, demo=None):
         taxdocs.ensure(STATE["db"])
         pf.ensure(STATE["db"])
         pf.ensure_appointments(STATE["db"])
+        training.ensure(STATE["db"])
+        sens.ensure(STATE["db"])
+        if demo == "stew" and not training.roles(STATE["db"]):
+            # sample: a role with training, so the demo shows trainees and sign-offs
+            training.add_role(STATE["db"], 4, seed.OWNER, "Stocker",
+                              ["Receiving check: temps and dates", "Rotation: oldest date forward", "Pull list and par levels",
+                               "Safe lifting and ladder use"])
+            STATE["db"].commit()
         if sample:
             for sku, upc in seed.SAMPLE_UPCS.items():
                 STATE["db"].execute("UPDATE products SET upc=? WHERE sku=?", (upc, sku))
@@ -567,6 +577,9 @@ def topbar(x_member: str = Header(None)):
             if lvl >= 1:
                 notes.append({"kind": "ticket", "text": f"{t['id']} {t['status']}: {t['subject']}", "go": "stew"})
         if lvl >= 2:
+            for x in _sens_snapshot(d)["drops"][:3]:
+                notes.append({"kind": "86", "text": f"{x['what']} is down {x['down_pct']}% vs a typical day so far "
+                              f"({x['now']} vs {x['typical']:g})", "go": "home"})
             for a in _appointments(d):
                 if a["state"] == "alert":
                     notes.append({"kind": "money", "text": f"Due {a['due_on']}: {a['client']} owes ${a['balance_cents'] / 100:,.2f}. "
@@ -605,6 +618,8 @@ def team(x_member: str = Header(None)):
                        | {"cook", "dishwasher", "server", "host", "bartender", "prep"})
         rows = roster(d, show_pay=m["level"] >= 3)
         for r in rows:
+            r["training"] = training.progress(d, r["id"], r["title"])
+            r["can_sign"] = training.can_sign(d, m["id"], m["level"], r["id"], r["title"])
             st = auth.status(d, r["id"])
             r["sign_in"] = {k: st[k] for k in ("enrolled", "last_sign_in", "setup_code_open")}
             r["can_issue_code"] = auth.can_issue(d, m["id"], r["id"])
@@ -612,7 +627,7 @@ def team(x_member: str = Header(None)):
             r["can_enter_id"] = idin.can_enter(d, m["id"], r["id"])
         return {"members": rows, "can_set_level": m["level"] >= 4,
                 "can_set_pay": m["level"] >= 3, "can_view_id": idin.can_view(d, m["id"]), "roles": roles,
-                "doc_types": idin.DOC_TYPES, "job_roles": job_roles(d)}
+                "doc_types": idin.DOC_TYPES, "job_roles": job_roles(d), "can_add_role": m["level"] >= training.ADD_LEVEL}
 
 
 @app.get("/api/team/{member_id}/id")
@@ -876,6 +891,26 @@ def tech_fee(hours: float, x_member: str = Header(None)):
     if not 0 < hours <= 24:
         raise HTTPException(400, "Hours must be between 0 and 24")
     return pf.tech_fee(hours)
+
+
+# ---------------- Set up role (managers): level, reports to, training, who certifies, staff ----------------
+
+@app.get("/api/roles")
+def roles_view(x_member: str = Header(None)):
+    with LOCK:
+        m = member(x_member)
+        need(m, 2, "Setting up roles")
+        d = db()
+        team = roster(d)
+        out = []
+        for r in job_roles(d):
+            info = training.role_info(d, r)
+            staff = [{"id": x["id"], "name": x["name"], "level": x["level"],
+                      "training": training.progress(d, x["id"], r)} for x in team if (x["title"] or "").lower() == r.lower()]
+            certifiers = [x["name"] for x in team if x["level"] >= 2] + \
+                         [s["name"] + " (trained lead)" for s in staff if s["level"] == 1 and not s["training"]["trainee"] and s["training"]["total"]]
+            out.append({**info, "role": r, "staff": staff, "certifiers": certifiers})
+        return {"roles": out, "max_level": min(m["level"], 3), "level_names": [LEVEL_NAMES[i] for i in range(4)]}
 
 
 # ---------------- Recall (HiWR -> Recall): recurring numbers and averages ----------------
@@ -1300,6 +1335,68 @@ def _card(m, kind, params):
             raise HTTPException(404, "That task is not on your list")
         return {"title": f"Mark done: {t['title']}", "lines": [f"Assigned by {t['assigned_by']}", "They see it as done, with your name and the time"],
                 "fix": [{"field": "note", "label": "Note (optional)", "type": "text"}]}
+    if kind == "set_refresh":
+        need(m, 4, "Changing when numbers refresh")
+        mode = params.get("mode")
+        if mode not in sens.REFRESH:
+            raise HTTPException(400, "Pick when the check runs")
+        return {"title": f"Check falling numbers: {sens.REFRESH[mode]}",
+                "lines": [f"Was: {sens.REFRESH[sens.get_refresh(d)]}",
+                          "Closed days (Sundays and holidays in the sample) are skipped" if mode != "live" else
+                          "Recomputed every time someone looks", "Kept on the record with your name"],
+                "fix": []}
+    if kind == "set_sensitivity":
+        need(m, 4, "Changing the sensitivity")
+        v = int(params.get("level", 0))
+        if not 1 <= v <= 10:
+            raise HTTPException(400, "Sensitivity is 1 to 10")
+        name, rule = sens.ai_rule(v)
+        return {"title": f"Set sensitivity to falling numbers: {v} of 10 (now {sens.get(d)})",
+                "lines": [f"Alerts when a number falls {sens.threshold_pct(v)}% or more below typical",
+                          f"Right now that would flag {len(sens.drops(d, seed.TODAY, STATE['clock'], v))} item(s)",
+                          f"The assistant: {name}. {rule}",
+                          "Kept on the record with your name"],
+                "fix": []}
+    if kind == "save_role":
+        try:
+            role, level, reports_to, steps = training.check_save(d, m["level"], params.get("role"), params.get("level"),
+                                                                 params.get("reports_to"), params.get("steps") or [], job_roles(d))
+        except PermissionError as e:
+            raise HTTPException(403, str(e))
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+        before = training.role_info(d, role)
+        lines = [f"Suggested level: {level} {LEVEL_NAMES[level]} (a person's own level is still set by the account holder)",
+                 f"Reports to: {reports_to or 'no one (top of the tree)'}",
+                 f"Training: {len(steps)} step(s)" + (": " + "; ".join(steps) if steps else "")]
+        if before["steps"] and before["steps"] != steps:
+            lines.append("Training changed: people already signed off keep their sign-offs; new steps need signing")
+        lines.append("Saved as a new version; earlier setups stay on the record")
+        return {"title": f"Save the {role} role", "lines": lines, "fix": []}
+    if kind == "add_role":
+        try:
+            role, steps = training.check_add(d, m["level"], params.get("role"), params.get("steps") or [])
+        except PermissionError as e:
+            raise HTTPException(403, str(e))
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+        return {"title": f"Add the job role {role}",
+                "lines": [f"It joins the job-role list on the Team screen"]
+                         + ([f"Training: {len(steps)} step(s): " + "; ".join(steps)] if steps else ["No training steps"])
+                         + ["People in this role are trainees until each step is signed off; training never changes access"],
+                "fix": [{"field": "role", "label": "Role name", "type": "text"}]}
+    if kind == "sign_training":
+        mem = get_member(d, params.get("member_id") or "")
+        if not mem:
+            raise HTTPException(404, "Not on the team")
+        role, step = mem["title"], params.get("step")
+        if not training.can_sign(d, m["id"], m["level"], mem["id"], role):
+            raise HTTPException(403, "Sign-offs come from a manager, or a lead who finished this training; never yourself")
+        if step not in training.steps_for(d, role):
+            raise HTTPException(400, "That step isn't part of this role's training")
+        return {"title": f"Sign off {mem['name']}: {step}",
+                "lines": [f"{role} training, signed by you, kept on the record", "This doesn't change their access level"],
+                "fix": [{"field": "note", "label": "Note (optional)", "type": "text"}]}
     if kind == "book_appointment":
         need(m, 2, "Booking an appointment")
         line, start = params.get("line"), str(params.get("starts_at", ""))
@@ -1474,6 +1571,20 @@ def _apply(m, kind, params):
             except ValueError:
                 pass                      # already paid or charged meanwhile: nothing to add
         return out
+    if kind == "set_refresh":
+        return f"Falling-numbers check: {sens.REFRESH[sens.set_refresh(d, params['mode'], m['id'])]}"
+    if kind == "set_sensitivity":
+        return f"Sensitivity set to {sens.set_level(d, params['level'], m['id'])}"
+    if kind == "save_role":
+        role = training.save_role(d, m["id"], m["level"], params.get("role"), params.get("level"), params.get("reports_to"),
+                                  params.get("steps") or [], job_roles(d))
+        return f"{role} saved"
+    if kind == "add_role":
+        return f"{training.add_role(d, m['level'], m['id'], params.get('role'), params.get('steps') or [])} added to the job roles"
+    if kind == "sign_training":
+        mem = get_member(d, params["member_id"])
+        training.sign_off(d, m["id"], m["level"], mem["id"], mem["title"], params["step"], params.get("note"))
+        return "Signed off"
     if kind == "book_appointment":
         aid = pf.book(d, params["line"], " ".join(str(params["client"]).split())[:60], params["starts_at"],
                       params.get("what") or "Appointment", int(params["price_cents"]), int(params.get("deposit_cents") or 0), m["id"])
@@ -1645,6 +1756,32 @@ def _suggestions(d, team, files, log):
     return [{"id": i, "text": txt} for i, txt in tips]
 
 
+def _now_day_hour():
+    if STATE["sample"]:
+        return seed.TODAY, STATE["clock"]
+    from datetime import datetime
+    n = datetime.now()
+    return n.date().isoformat(), n.hour
+
+
+def _sens_snapshot(d):
+    day, hour = _now_day_hour()
+    return sens.snapshot(d, sens.get(d), sens.get_refresh(d), day, hour)
+
+
+def _sens_view(d):
+    lvl = sens.get(d)
+    preview = {}
+    for x in (1, 3, 5, 7, 10):
+        preview[x] = sens.drops(d, seed.TODAY, STATE["clock"], x)
+    name, rule = sens.ai_rule(lvl)
+    return {"level": lvl, "threshold_pct": sens.threshold_pct(lvl), "ai": name, "ai_rule": rule,
+            "drops": sens.drops(d, seed.TODAY, STATE["clock"], lvl),
+            "refresh": sens.get_refresh(d), "refresh_options": sens.REFRESH, "snapshot": _sens_snapshot(d),
+            "preview": {str(k): len(v) for k, v in preview.items()},
+            "levels": {str(k): {"threshold_pct": sens.threshold_pct(k), "ai": sens.ai_rule(k)[0]} for k in range(1, 11)}}
+
+
 @app.get("/api/settings")
 def settings(x_member: str = Header(None)):
     """Read-only view for the account holder: who sees what (sensitivity), every confirm-card outcome and
@@ -1673,6 +1810,7 @@ def settings(x_member: str = Header(None)):
                 "money": "Refunds, fees, payroll and purchases always need two certified approvers.",
             },
             "suggestions": _suggestions(d, team, files, log),
+            "drop_sensitivity": _sens_view(d),
             "confirmations": log,
             "checkins": checkins,
             # Sign-in history and where each sign-in came from (method · device · ip · who issued it), append-only
@@ -1797,7 +1935,11 @@ def assistant_ask(a: Ask, x_member: str = Header(None)):
                 return {"role": "assistant", "text": fast, "backend": "schedule"}
             chat["busy"] = True
     try:
-        reply = chat["agent"].ask(text)          # LOCK is taken only around database work, not model time
+        with LOCK:
+            name, rule = sens.ai_rule(sens.get(db()))
+        reply = chat["agent"].ask(f"{text}\n\n(Business setting, estimation {name}: {rule})")   # LOCK only around db work
+        if chat["agent"].history and chat["agent"].history[-1][0] != text:
+            chat["agent"].history[-1] = (text, chat["agent"].history[-1][1])
     except BackendUnavailable as e:
         raise HTTPException(503, f"Couldn't reach the local model: {e}")
     except sqlite3.ProgrammingError:

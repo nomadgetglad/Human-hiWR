@@ -8,6 +8,8 @@ import { useData } from "./useData";
 import { TeamChat } from "./TeamChat";
 import { ChatBox } from "./ChatBox";
 import { MyDocuments, NoticesPanel, TaxFormsAdmin, WeekSchedule } from "./Notices";
+import { Rotator } from "./Add";
+import { AboutAndDisclaimers, SensitivityDial } from "./SettingsExtras";
 import { ScanDialog } from "./Scan";
 import { sampleNote, sampleQr, sampleUpc } from "./samples";
 import { BUSINESSES, switchBusiness } from "./TopBar";
@@ -61,7 +63,7 @@ export function Home({ me, go }: { me: Me; go: (s: string) => void }) {
                   {b.icon}
                 </span>
                 <span className="tile-label">{t(b.name)}</span>
-                <span className="muted small">{t(b.detail)}</span>
+                <span className="muted small">{b.examples ? <Rotator items={b.examples} /> : t(b.detail)}</span>
               </Button>
             ))}
           </div>
@@ -163,6 +165,7 @@ export function Team() {
   const { propose } = useProposals();
   const v = useData<{ members: any[]; can_set_level: boolean; can_set_pay: boolean; can_view_id: boolean; roles: string[]; doc_types: Record<string, string>; job_roles: string[] }>("/api/team");
   const [idFor, setIdFor] = useState<{ id: string; name: string; view: boolean } | null>(null);
+  const [trainFor, setTrainFor] = useState<string | null>(null);
   const [first, setFirst] = useState("");
   const [title, setTitle] = useState("");
   const [language, setLanguage] = useState("en");
@@ -180,7 +183,12 @@ export function Team() {
   };
   return (
     <section>
-      <h1 className="h1">{t("Team")}</h1>
+      <div className="row-between">
+        <h1 className="h1">{t("Team")}</h1>
+        <Button className="btn btn-sm" onPress={() => (location.search = location.search.replace(/([?&])screen=[^&]*/, "$1").replace(/&$/, "") + (location.search ? "&" : "?") + "screen=roles")}>
+          🏷 {t("Set up roles")}
+        </Button>
+      </div>
       <div className="panel">
         <h2 className="h2">{t("Add staff")}</h2>
         <p className="muted small">{t("First name only. They start at level 0 (Staff); only the account holder raises a level.")}</p>
@@ -253,7 +261,34 @@ export function Team() {
                     <b>{m.name}</b>
                     <div className="muted small">{m.id}</div>
                   </td>
-                  <td>{m.title}</td>
+                  <td>
+                    {m.title}
+                    {m.training?.total > 0 && (
+                      <div>
+                        <Button className={`badge badge-btn ${m.training.trainee ? "badge-refused" : "badge-confirmed"}`} onPress={() => setTrainFor(trainFor === m.id ? null : m.id)}>
+                          {m.training.trainee ? `${t("Trainee")} ${m.training.done}/${m.training.total}` : t("Trained")}
+                        </Button>
+                      </div>
+                    )}
+                    {trainFor === m.id && (
+                      <ul className="settings-list train-steps">
+                        {m.training.steps.map((s: any) => (
+                          <li key={s.step} className="small">
+                            {s.signed_by ? "☑" : "☐"} {s.step}
+                            {s.signed_by ? (
+                              <span className="muted"> · {t("signed by")} {s.signed_by}</span>
+                            ) : (
+                              m.can_sign && (
+                                <Button className="btn btn-ghost btn-sm" onPress={() => propose("sign_training", { member_id: m.id, step: s.step })}>
+                                  {t("Sign off")}
+                                </Button>
+                              )
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </td>
                   <td>
                     <span className="badge">
                       L{m.level} {t(m.level_name)}
@@ -411,6 +446,7 @@ function MeshPanel() {
               · {x.made} {t("made")} · {x.avg_min ?? "—"} min · {pct(x.remake_pct)} {t("remade")} · {t("last")} {x.last}
             </span>
             {v.best[x.item]?.member === x.member && <span className="badge badge-confirmed"> {t("BEST FIT")}</span>}
+            {x.remake_pct >= 10 && <span className="badge badge-refused"> {t("SUGGEST TRAINING")}</span>}
           </li>
         ))}
       </ul>
@@ -1074,6 +1110,7 @@ export function Assistant({ embedded = false, me }: { embedded?: boolean; me?: M
 
 // ---------------- Business profile: the Human logo (account holder only) ----------------
 type Settings = {
+  drop_sensitivity?: any;
   business: { owner: string; data: string; people: number };
   suggestions: { id: string; text: string }[];
   sensitivity: { levels: { level: number; name: string; sees: string; people: number }[]; files: [string, number][]; assistant: string; money: string };
@@ -1110,6 +1147,8 @@ export function BusinessProfile() {
           </ul>
         </div>
       )}
+
+      {s.drop_sensitivity && <SensitivityDial s={s.drop_sensitivity} />}
 
       <div className="panel">
         <h2 className="h2">{t("Sensitivity")}: {t("Who sees what")}</h2>
@@ -1238,6 +1277,7 @@ export function BusinessProfile() {
           </div>
         )}
       </div>
+      <AboutAndDisclaimers />
     </section>
   );
 }

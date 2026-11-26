@@ -33,7 +33,7 @@ async function readCode(url: string): Promise<Found | null> {
   }
 }
 
-async function readText(url: string): Promise<Found | null> {
+export async function readText(url: string): Promise<Found | null> {
   // Loaded only when needed; the reader and English data are served from this app (public/ocr), not the internet.
   const { createWorker } = await import("tesseract.js");
   const base = `${location.origin}/ocr`;
