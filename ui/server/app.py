@@ -1711,6 +1711,51 @@ def assistant_history(x_member: str = Header(None)):
             "messages": [x for u, r in hist for x in ({"role": "user", "text": u}, {"role": "assistant", "text": r})]}
 
 
+_STAFFING_Q = re.compile(r"\b(short|shortage|cover|covering|availab\w*|on shift|who'?s (on|working|in)|who is (on|working|in)|"
+                         r"staff(ed|ing)?|call[- ]?outs?|working tonight)\b", re.I)
+
+
+def _staffing_answer(d, m, text):
+    """A direct answer to staffing questions from the schedule, or None to let the model answer."""
+    if not _STAFFING_Q.search(text):
+        return None
+    try:
+        if m["level"] < 1:
+            shift = d.execute("SELECT start_hour, end_hour FROM staff_availability WHERE member=? AND day=?",
+                              (m["id"], seed.TODAY)).fetchone()
+            mine = [s for s in seed.week_schedule(seed.TODAY).get(seed.TODAY, []) if s[0] == m["id"]] if STATE["sample"] else []
+            if shift:
+                return f"You're on today from {shift['start_hour']}:00 to {shift['end_hour']}:00."
+            if mine:
+                return f"You're on today from {mine[0][1]}:00 to {mine[0][2]}:00."
+            return "You're not on the schedule today. If you need a person about your schedule, just ask and I'll pass it to customer service."
+        v = staff_section(d, seed.TODAY)
+    except sqlite3.OperationalError:
+        return None
+    if not v["roles"]:
+        return "There's no staffing plan set up yet, so I can't say who's short. Add roles and shifts on the Team screen."
+    lines = []
+    for r in v["roles"]:
+        names = ", ".join(_first_name(d, x.split(" ")[0]) + (" (temp)" if "(temp)" in x else "") for x in r["on_shift"]) or "nobody"
+        state = f"short {r['short']}" if r["short"] else "covered"
+        lines.append(f"- {r['role'].title()}: need {r['need']}, on {len(r['on_shift'])} ({names}), {state}")
+    short = [r for r in v["roles"] if r["short"]]
+    head = (f"Tonight ({v['demand']['covers']} covers expected): " if isinstance(v.get("demand"), dict) and "covers" in v["demand"]
+            else "Tonight: ") + ("short on " + ", ".join(f"{r['short']} {r['role']}" for r in short) + "." if short else "everyone's covered.")
+    out = [head, *lines]
+    if short and m["level"] >= 2:
+        r = short[0]
+        rule = d.execute("SELECT * FROM staffing_rules WHERE role=?", (r["role"],)).fetchone()
+        if rule:
+            cands = find_same_night(d, r["role"], f"{seed.TODAY}T{int(rule['start_hour']):02d}:00",
+                                    f"{seed.TODAY}T{int(rule['end_hour']):02d}:00", now_iso())[:3]
+            if cands:
+                out.append("Best same-night cover: " + ", ".join(c["name"].split()[0] for c in cands)
+                           + ". Open Staff to text them (you confirm first).")
+    out.append("(Straight from the schedule, so it's instant.)")
+    return "\n".join(out)
+
+
 @app.post("/api/assistant")
 def assistant_ask(a: Ask, x_member: str = Header(None)):
     from agent.backends import BackendUnavailable
@@ -1729,6 +1774,12 @@ def assistant_ask(a: Ask, x_member: str = Header(None)):
                 raise HTTPException(409, "Still answering your last question")
             if chat is None:
                 chat = CHATS[m["id"]] = {"agent": _new_agent(m), "busy": False}
+            # Who's short / who's available: answered straight from the schedule, in under a second, instead of
+            # waiting 30-60 s on the local model. Same level rules as the Staff screen.
+            fast = _staffing_answer(db(), m, text)
+            if fast:
+                chat["agent"].history.append((text, fast))
+                return {"role": "assistant", "text": fast, "backend": "schedule"}
             chat["busy"] = True
     try:
         reply = chat["agent"].ask(text)          # LOCK is taken only around database work, not model time
