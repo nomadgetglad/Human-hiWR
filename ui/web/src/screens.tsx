@@ -7,6 +7,7 @@ import { useT } from "./i18n";
 import { useData } from "./useData";
 import { TeamChat } from "./TeamChat";
 import { ChatBox } from "./ChatBox";
+import { MyDocuments, NoticesPanel, TaxFormsAdmin, WeekSchedule } from "./Notices";
 import { ScanDialog } from "./Scan";
 import { sampleNote, sampleQr, sampleUpc } from "./samples";
 import { BUSINESSES, switchBusiness } from "./TopBar";
@@ -22,6 +23,7 @@ export function Home({ me, go }: { me: Me; go: (s: string) => void }) {
   return (
     <section>
       <Assistant embedded me={me} />
+      <MyDocuments />
       {me.sample && <DemoTry me={me} go={go} />}
       {me.sample && (
         <div className="panel row-between">
@@ -330,6 +332,8 @@ export function MeshScreen() {
     <section>
       <h1 className="h1">🕸 {t("Mesh")}</h1>
       <TeamChat />
+      <NoticesPanel />
+      <WeekSchedule />
       <MeshPanel />
     </section>
   );
@@ -907,6 +911,7 @@ export function Accounting() {
   return (
     <section>
       <h1 className="h1">{t("Accounting")}</h1>
+      <TaxFormsAdmin />
       <div className="panel">
         <h2 className="h2">{t("Money waiting for approval")}</h2>
         {rows.map((a) => (
@@ -955,7 +960,10 @@ export function Tasks() {
             </span>
             <span className="task-title">{r.title}</span>
             {r.status !== "done" && (
-              <Button className="btn btn-sm btn-primary" onPress={() => propose("task_done", { assignment_id: r.id })}>
+              <Button
+                className="btn btn-sm btn-primary"
+                onPress={() => (r.kind === "notice" ? propose("notice_task_done", { task_id: r.id }) : propose("task_done", { assignment_id: r.id }))}
+              >
                 {t("Mark done")}
               </Button>
             )}

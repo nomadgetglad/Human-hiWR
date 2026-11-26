@@ -320,3 +320,24 @@ def build(parts=("restaurant", "stock")):
         make_batches(db, "fried tortilla chips", 3, TODAY + "T10:30", "fry_rosa")
     db.commit()
     return db
+
+
+# ---------- Sample week schedule and year-end wages (demo data) ----------
+# Who works when, for the week starting TODAY. Ends at 22 or 23 = closing. Used for deep-clean notices.
+_ROTA = [
+    ("chef_marco", 14, 23), ("fry_rosa", 15, 23), ("cook_luis", 15, 22), ("cook_dan", 11, 19),
+    ("cook_ana", 16, 23), ("dish_ray", 17, 23), ("dish_eve", 17, 23), ("stocker_tim", 6, 14),
+]
+_OFF = {0: {"cook_dan", "dish_eve"}, 1: {"chef_marco", "dish_ray"}, 2: {"fry_rosa", "cook_ana"},
+        3: {"cook_luis", "stocker_tim"}, 4: {"cook_dan", "dish_ray"}, 5: {"chef_marco", "cook_ana"},
+        6: {"fry_rosa", "dish_eve"}}
+
+
+def week_schedule(start=TODAY):
+    d0 = date.fromisoformat(start)
+    return {(d0 + timedelta(days=i)).isoformat(): [s for s in _ROTA if s[0] not in _OFF[i]] for i in range(7)}
+
+
+# Last year's wages for the W-2 demo (sample amounts, cents)
+SAMPLE_WAGES_2025 = {"chef_marco": 5200000, "manager_jo": 5800000, "accounting_sue": 4900000,
+                     "fry_rosa": 3120000, "stocker_tim": 2496000}

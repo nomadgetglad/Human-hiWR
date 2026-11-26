@@ -37,6 +37,8 @@ from hiwr_stew import portions_left, cost_card, check_order_note, explode, sell,
 from hiwr_warehouse import pull_list, record_pull
 from hiwr_roster import ADD_LEVEL, add_member, check_new_member, get_member, job_roles, roster
 import hiwr_auth as auth
+import hiwr_notices as notices_mod
+import hiwr_taxdocs as taxdocs
 import hiwr_idintake as idin
 from hiwr_vault import Vault
 
@@ -158,6 +160,8 @@ def reset(sample=True, demo=None):
         _ensure_confirm_log(STATE["db"])
         _ensure_upc(STATE["db"])
         _ensure_team_chat(STATE["db"])
+        notices_mod.ensure(STATE["db"])
+        taxdocs.ensure(STATE["db"])
         if sample:
             for sku, upc in seed.SAMPLE_UPCS.items():
                 STATE["db"].execute("UPDATE products SET upc=? WHERE sku=?", (upc, sku))
@@ -289,7 +293,7 @@ def sections(d, m):
     menu.append({"id": "assistant", "label": "Assistant"})   # local model; it sees only what this level may see
     if lvl >= 3 and _any(d, "SELECT 1 FROM money_actions"):
         menu.append({"id": "accounting", "label": "Accounting"})
-    if lvl < 2 and my_day(d, me_id, seed.TODAY):
+    if lvl < 2 and (my_day(d, me_id, seed.TODAY) or _any(d, "SELECT 1 FROM notice_tasks WHERE member=?", (me_id,))):
         menu.append({"id": "tasks", "label": "My tasks"})
     return menu
 
@@ -568,7 +572,11 @@ def topbar(x_member: str = Header(None)):
 def tasks(x_member: str = Header(None)):
     with LOCK:
         m = member(x_member)
-        return my_day(db(), m["id"], seed.TODAY)
+        d = db()
+        rows = my_day(d, m["id"], seed.TODAY)
+        rows += [{"id": f"n{t['id']}", "kind": "notice", "title": f"{t['area']} ({t['title']}, {t['due_on']})",
+                  "due_on": t["due_on"], "status": t["status"]} for t in notices_mod.tasks_for(d, m["id"])]
+        return rows
 
 
 # ---------------- Team (roster) ----------------
@@ -726,6 +734,76 @@ def scene(x_member: str = Header(None)):
         return {"shows_costs": costs_ok, "invoices": inv, "anticipated_cents": anticipated if costs_ok else None,
                 "units": [{"material": k, "before": unit_before[k], "after": unit_after[k]} for k in sorted(settled)] if costs_ok else [],
                 "dishes": dishes, "approvals": approvals}
+
+
+# ---------------- Schedule, notices -> tasks, tax forms ----------------
+
+def _week():
+    return seed.week_schedule(seed.TODAY) if STATE["sample"] else {}
+
+
+@app.get("/api/schedule")
+def schedule(x_member: str = Header(None)):
+    """The week's shifts (sample schedule on the demos). Leads and up see the team; staff see their own."""
+    with LOCK:
+        m = member(x_member)
+        d = db()
+        out = []
+        for day, shifts in sorted(_week().items()):
+            rows = [{"member": w, "name": _first_name(d, w), "start": a, "end": b, "closes": b >= notices_mod.CLOSING_FROM}
+                    for w, a, b in shifts if m["level"] >= 1 or w == m["id"]]
+            out.append({"day": day, "shifts": rows})
+        return {"week": out}
+
+
+@app.get("/api/notices")
+def notices_view(x_member: str = Header(None)):
+    with LOCK:
+        m = member(x_member)
+        need(m, 1, "Notices")
+        d = db()
+        rows = notices_mod.notices(d)
+        for n in rows:
+            n["posted_by_name"] = _first_name(d, n["posted_by"])
+            for t in n["tasks"]:
+                t["name"] = _first_name(d, t["member"])
+        return {"notices": rows, "can_post": m["level"] >= notices_mod.POST_LEVEL,
+                "areas": notices_mod.DEEP_CLEAN_AREAS, "has_schedule": bool(_week())}
+
+
+@app.get("/api/docs")
+def docs(x_member: str = Header(None)):
+    with LOCK:
+        m = member(x_member)
+        d = db()
+        out = {"mine": taxdocs.my_documents(d, m["id"]), "can_post": m["level"] >= taxdocs.POST_LEVEL}
+        if out["can_post"]:
+            out["posted"] = [{**x, "name": _first_name(d, x["member"])} for x in taxdocs.posted(d, m["level"])]
+        return out
+
+
+@app.get("/api/docs/{doc_id}")
+def doc_open(doc_id: int, x_member: str = Header(None)):
+    """Opening a tax form is logged, every time. Your own, or anyone's at Finance level."""
+    with LOCK:
+        m = member(x_member)
+        try:
+            out = taxdocs.open_document(db(), m["id"], m["level"], doc_id)
+        except PermissionError as e:
+            raise HTTPException(403, str(e))
+        except LookupError as e:
+            raise HTTPException(404, str(e))
+        db().commit()
+        out["name"] = _first_name(db(), out["member"])
+        return out
+
+
+def _wages(d, year):
+    if STATE["sample"]:
+        return {k: v for k, v in seed.SAMPLE_WAGES_2025.items() if get_member(d, k)}
+    # your own account: hourly rate x 1,560 hours as a placeholder until payroll is connected
+    return {r["member"]: r["hourly_cents"] * 1560 for r in d.execute("SELECT member, hourly_cents FROM staff")
+            if r["hourly_cents"] and get_member(d, r["member"])}
 
 
 # ---------------- Team chat (HiWR -> Mesh) ----------------
@@ -1136,6 +1214,39 @@ def _card(m, kind, params):
             raise HTTPException(404, "That task is not on your list")
         return {"title": f"Mark done: {t['title']}", "lines": [f"Assigned by {t['assigned_by']}", "They see it as done, with your name and the time"],
                 "fix": [{"field": "note", "label": "Note (optional)", "type": "text"}]}
+    if kind == "post_notice":
+        need(m, notices_mod.POST_LEVEL, "Posting a notice")
+        week = _week()
+        if not week:
+            raise HTTPException(400, "There's no schedule yet to spread the tasks over")
+        try:
+            plan = notices_mod.plan(week, notices_mod.DEEP_CLEAN_AREAS)
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+        return {"title": f"Post the deep-clean notice for the week of {min(week)}",
+                "lines": [f"{t['due_on']}: {_first_name(d, t['member'])}, {t['area']}" for t in plan]
+                         + ["Each one lands in that person's tasks; done marks are kept, never edited"],
+                "fix": []}
+    if kind == "notice_task_done":
+        tid = int(str(params.get("task_id", "")).lstrip("n") or 0)
+        r = d.execute("SELECT * FROM notice_tasks WHERE id=? AND member=?", (tid, m["id"])).fetchone()
+        if not r:
+            raise HTTPException(404, "That task is not on your list")
+        return {"title": f"Mark done: {r['area']}", "lines": ["Your manager sees it as done, with your name and the time"],
+                "fix": [{"field": "note", "label": "Note (optional)", "type": "text"}]}
+    if kind == "post_w2s":
+        try:
+            year, new = taxdocs.check_post(d, m["level"], int(params.get("year", 2025)), _wages(d, int(params.get("year", 2025))))
+        except PermissionError as e:
+            raise HTTPException(403, str(e))
+        except ValueError as e:
+            raise HTTPException(409, str(e))
+        return {"title": f"Post {len(new)} W-2s for {year}",
+                "lines": [f"For: {', '.join(_first_name(d, k) for k in new)}",
+                          f"Total wages ${sum(new.values()) / 100:,.2f}" + (" (sample data)" if STATE["sample"] else ""),
+                          "Each person sees only their own; every opening is logged",
+                          "No Social Security numbers or last names on the forms"],
+                "fix": []}
     if kind == "import_sales":
         need(m, 2, "Importing sales")
         v = _resolve_sales(d, params.get("rows"))
@@ -1234,6 +1345,16 @@ def _apply(m, kind, params):
         return "Marked done"
     if kind == "money_decide":
         return approve(d, params["money_action_id"], m["id"], params["decision"])
+    if kind == "post_notice":
+        nid = notices_mod.post(d, m["level"], m["id"], "deep_clean", "Deep clean", min(_week()),
+                               notices_mod.DEEP_CLEAN_AREAS, _week())
+        return f"Deep-clean notice posted; {len(notices_mod.DEEP_CLEAN_AREAS)} tasks scheduled (notice {nid})"
+    if kind == "notice_task_done":
+        notices_mod.mark_done(d, int(str(params["task_id"]).lstrip("n")), m["id"], params.get("note"))
+        return "Marked done"
+    if kind == "post_w2s":
+        n = taxdocs.post_w2s(d, m["id"], m["level"], int(params.get("year", 2025)), _wages(d, int(params.get("year", 2025))))
+        return f"{n} W-2s posted"
     if kind == "import_sales":
         v = _resolve_sales(d, params.get("rows"))
         for (dish, hour), qty in v["dishes"].items():
