@@ -99,6 +99,9 @@ const es: Record<string, string> = {
   "Pick a job role": "Elige un puesto",
   "Business profile": "Perfil del negocio",
   "Switch business": "Cambiar de negocio",
+  "First time? Set up your authenticator (QR code)": "¿Primera vez? Configura tu autenticador (código QR)",
+  "The account holder's first code is printed in the app server window. Press Next and the QR code for your authenticator app appears.":
+    "El primer código del titular aparece en la ventana del servidor. Pulsa Siguiente y aparece el código QR para tu app de autenticación.",
   "Get more out of Human": "Saca más provecho de Human",
   "Take the tour": "Hacer el recorrido",
   "Guided tour": "Recorrido guiado",

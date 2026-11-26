@@ -76,8 +76,8 @@ export function SignIn({ onDone }: { onDone: () => void }) {
                 <Button className="btn btn-primary btn-wide" isDisabled={!six || busy} onPress={signIn}>
                   {t("Sign in")}
                 </Button>
-                <Button className="btn btn-ghost btn-wide" onPress={() => { setMode("setup"); setCode(""); setErr(""); }}>
-                  {t("First time on this phone? I have a setup code")}
+                <Button className="btn btn-wide" onPress={() => { setMode("setup"); setCode(""); setErr(""); }}>
+                  {t("First time? Set up your authenticator (QR code)")}
                 </Button>
               </>
             )}
@@ -87,6 +87,9 @@ export function SignIn({ onDone }: { onDone: () => void }) {
                   <Label>{t("Setup code from your manager")}</Label>
                   <Input autoCapitalize="characters" autoComplete="off" className="code-input" placeholder="ABCD-EFGH" />
                 </TextField>
+                <p className="muted small">
+                  {t("The account holder's first code is printed in the app server window. Press Next and the QR code for your authenticator app appears.")}
+                </p>
                 <Button className="btn btn-primary btn-wide" isDisabled={setupCode.replace(/[^a-z0-9]/gi, "").length !== 8 || busy} onPress={start}>
                   {t("Next")}
                 </Button>
