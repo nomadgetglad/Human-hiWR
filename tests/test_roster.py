@@ -395,3 +395,18 @@ def test_sign_in_can_be_switched_off_for_this_pc(tmp_path, monkeypatch):
     finally:
         monkeypatch.delenv("HUMAN_AUTH")
         appmod.reset()
+
+
+def test_test_copy_keeps_sign_in_on_with_demo_data_and_a_guest(monkeypatch):
+    monkeypatch.setenv("HUMAN_AUTH", "force")
+    monkeypatch.setenv("HUMAN_GUEST", "Robert")
+    appmod.reset(demo="stew")
+    try:
+        c = TestClient(appmod.app, raise_server_exceptions=False)
+        assert c.get("/api/auth/status").json()["auth_required"] is True
+        assert c.get("/api/me", headers=H("owner_alex")).status_code == 401      # no header sign-in on a shared copy
+        assert len(appmod.STATE["guest_code"]) == 8
+        assert any(m["name"] == "Robert" for m in c.get("/api/members").json())
+    finally:
+        monkeypatch.delenv("HUMAN_AUTH"); monkeypatch.delenv("HUMAN_GUEST")
+        appmod.reset()

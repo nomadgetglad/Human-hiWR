@@ -145,11 +145,14 @@ def reset(sample=True, demo=None):
         STATE["demo"] = demo
         STATE["clock"] = 16          # prep clock hour, sample
         # Your own account needs a real sign-in, unless HUMAN_AUTH=off (this PC only: keep the server on 127.0.0.1)
-        STATE["auth"] = not sample and os.environ.get("HUMAN_AUTH", "on").lower() != "off"
+        # HUMAN_AUTH=force keeps sign-in on even for sample data: a test copy shared with someone off this PC.
+        mode = os.environ.get("HUMAN_AUTH", "on").lower()
+        STATE["auth"] = mode == "force" or (not sample and mode != "off")
         STATE["vault"] = (Vault.ephemeral() if sample or DB_PATH == ":memory:"
                           else Vault.from_file(str(Path(DB_PATH).with_suffix(".key"))))
         if STATE["auth"]:
             _first_owner_code()
+            _guest_code()
 
 
 def _first_owner_code():
@@ -166,8 +169,28 @@ def _first_owner_code():
           f"  Open the app on your phone, pick your name, choose 'First time', and type this code.\n", flush=True)
 
 
-# Starts empty (no test data) unless HUMAN_DATA=sample is set before starting the server
-reset(sample=os.environ.get("HUMAN_DATA", "blank").lower() == "sample")
+def _guest_code():
+    """HUMAN_GUEST=<first name> on a test copy: add that person at Finance level (sees everything but can't switch
+    the business) and print their one-time setup code in the server window, like the owner's."""
+    name = (os.environ.get("HUMAN_GUEST") or "").strip()
+    if not name:
+        return
+    d = STATE["db"]
+    r = d.execute("SELECT id FROM members WHERE first_name=?", (name,)).fetchone()
+    mid = r["id"] if r else add_member(d, name, "Manager", seed.OWNER, "en", 3, reason="test copy guest")
+    if auth.factor(d, mid):
+        return
+    code = auth.issue_setup_code(d, "console", mid)
+    d.commit()
+    STATE["guest_code"] = code
+    print(f"\n  Human: setup code for {name} ({mid})\n"
+          f"  Setup code: {code[:4]}-{code[4:]}  (good for {auth.SETUP_CODE_HOURS} hours)\n", flush=True)
+
+
+# Starts empty (no test data) unless HUMAN_DATA is set before starting the server:
+# sample = the full test restaurant; stew, stock or lab = that trial demo.
+_start = os.environ.get("HUMAN_DATA", "blank").lower()
+reset(sample=_start == "sample", demo=_start if _start in seed.DEMOS else None)
 
 
 def db():
