@@ -1188,3 +1188,118 @@ CREATE TABLE IF NOT EXISTS datakeeper_findings (   -- what the data keeper found
     id INTEGER PRIMARY KEY, run_at TEXT NOT NULL, check_name TEXT NOT NULL, severity TEXT NOT NULL,
     detail TEXT NOT NULL, proposed_fix TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'open', decided_by TEXT
 );
+
+-- ===================================================================
+-- Roster: who works here and can sign in. Adding staff is where an account starts.
+-- First names only (no last names). Rows are never edited or deleted: a change is a new event.
+-- ===================================================================
+CREATE TABLE IF NOT EXISTS members (
+    id          TEXT PRIMARY KEY,                -- e.g. cook_maria
+    first_name  TEXT NOT NULL,
+    title       TEXT NOT NULL,                   -- what the team calls the job: Cook, fryer
+    language    TEXT NOT NULL DEFAULT 'en',      -- en or es: the screen language they open in
+    added_by    TEXT NOT NULL,
+    added_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS member_status_events (
+    id          INTEGER PRIMARY KEY,
+    member      TEXT NOT NULL REFERENCES members(id),
+    status      TEXT NOT NULL CHECK (status IN ('active', 'inactive')),
+    actor       TEXT NOT NULL,
+    reason      TEXT,
+    at          TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TRIGGER IF NOT EXISTS members_no_update BEFORE UPDATE ON members BEGIN SELECT RAISE(ABORT, 'members is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS members_no_delete BEFORE DELETE ON members BEGIN SELECT RAISE(ABORT, 'members is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS member_status_events_no_update BEFORE UPDATE ON member_status_events BEGIN SELECT RAISE(ABORT, 'member_status_events is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS member_status_events_no_delete BEFORE DELETE ON member_status_events BEGIN SELECT RAISE(ABORT, 'member_status_events is append-only'); END;
+
+-- ===================================================================
+-- Sign-in with an authenticator app (TOTP: Google/Microsoft Authenticator, 1Password...).
+-- The secret is encrypted at rest (hiwr_vault). Codes and tokens are stored only as hashes.
+-- Every enrollment and sign-in is an event (method, device, time) for the settings page history.
+-- All append-only: a reset adds a new factor; ending a session adds an end row.
+-- ===================================================================
+CREATE TABLE IF NOT EXISTS auth_setup_codes (
+    id          INTEGER PRIMARY KEY,
+    member      TEXT NOT NULL REFERENCES members(id),
+    code_hash   TEXT NOT NULL,
+    issued_by   TEXT NOT NULL,                   -- a member id, or 'console' (someone at the server machine)
+    issued_at   TEXT NOT NULL,
+    expires_at  TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS auth_factors (
+    id          INTEGER PRIMARY KEY,
+    member      TEXT NOT NULL REFERENCES members(id),
+    method      TEXT NOT NULL CHECK (method IN ('totp')),   -- 'passkey' joins later
+    secret_enc  TEXT NOT NULL,
+    setup_code  INTEGER NOT NULL REFERENCES auth_setup_codes(id),
+    device      TEXT,
+    at          TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS auth_sessions (
+    token_hash  TEXT PRIMARY KEY,
+    member      TEXT NOT NULL REFERENCES members(id),
+    factor      INTEGER NOT NULL REFERENCES auth_factors(id),
+    device      TEXT,
+    at          TEXT NOT NULL,
+    expires_at  TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS auth_session_ends (
+    token_hash  TEXT NOT NULL REFERENCES auth_sessions(token_hash),
+    reason      TEXT NOT NULL,
+    at          TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS auth_events (
+    id          INTEGER PRIMARY KEY,
+    member      TEXT NOT NULL,
+    kind        TEXT NOT NULL CHECK (kind IN ('setup_code_issued', 'enrolled', 'signed_in', 'failed', 'locked',
+                                              'signed_out', 'reset')),
+    method      TEXT,                            -- totp, setup_code
+    factor      INTEGER,
+    step        INTEGER,                         -- TOTP time step used (blocks replay of the same code)
+    device      TEXT,                            -- browser and system, e.g. "Chrome on Android"
+    ip          TEXT,
+    actor       TEXT,                            -- who issued a code / reset, when not the member
+    detail      TEXT,
+    at          TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS auth_events_member ON auth_events(member, id);
+
+-- ===================================================================
+-- Employee ID intake. Identity details are encrypted (hiwr_vault); only the columns needed for
+-- reminders stay readable (document type, expiry, verified). Newest version wins, nothing is overwritten.
+-- Every time someone opens the details, it is logged.
+-- ===================================================================
+CREATE TABLE IF NOT EXISTS id_records (
+    id                  INTEGER PRIMARY KEY,
+    member              TEXT NOT NULL REFERENCES members(id),
+    doc_type            TEXT NOT NULL,
+    expires_on          TEXT,
+    work_auth_verified  INTEGER NOT NULL DEFAULT 0,
+    data_enc            TEXT NOT NULL,           -- legal name, birth date, document number, issuer, emergency contact
+    photo_enc           TEXT,                    -- optional photo of the ID, encrypted
+    entered_by          TEXT NOT NULL,
+    at                  TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS id_access_log (
+    id          INTEGER PRIMARY KEY,
+    member      TEXT NOT NULL,
+    viewer      TEXT NOT NULL,
+    what        TEXT NOT NULL,                   -- details, photo, entered
+    at          TEXT NOT NULL
+);
+CREATE TRIGGER IF NOT EXISTS auth_setup_codes_no_update BEFORE UPDATE ON auth_setup_codes BEGIN SELECT RAISE(ABORT, 'auth_setup_codes is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS auth_setup_codes_no_delete BEFORE DELETE ON auth_setup_codes BEGIN SELECT RAISE(ABORT, 'auth_setup_codes is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS auth_factors_no_update BEFORE UPDATE ON auth_factors BEGIN SELECT RAISE(ABORT, 'auth_factors is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS auth_factors_no_delete BEFORE DELETE ON auth_factors BEGIN SELECT RAISE(ABORT, 'auth_factors is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS auth_sessions_no_update BEFORE UPDATE ON auth_sessions BEGIN SELECT RAISE(ABORT, 'auth_sessions is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS auth_sessions_no_delete BEFORE DELETE ON auth_sessions BEGIN SELECT RAISE(ABORT, 'auth_sessions is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS auth_session_ends_no_update BEFORE UPDATE ON auth_session_ends BEGIN SELECT RAISE(ABORT, 'auth_session_ends is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS auth_session_ends_no_delete BEFORE DELETE ON auth_session_ends BEGIN SELECT RAISE(ABORT, 'auth_session_ends is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS auth_events_no_update BEFORE UPDATE ON auth_events BEGIN SELECT RAISE(ABORT, 'auth_events is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS auth_events_no_delete BEFORE DELETE ON auth_events BEGIN SELECT RAISE(ABORT, 'auth_events is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS id_records_no_update BEFORE UPDATE ON id_records BEGIN SELECT RAISE(ABORT, 'id_records is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS id_records_no_delete BEFORE DELETE ON id_records BEGIN SELECT RAISE(ABORT, 'id_records is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS id_access_log_no_update BEFORE UPDATE ON id_access_log BEGIN SELECT RAISE(ABORT, 'id_access_log is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS id_access_log_no_delete BEFORE DELETE ON id_access_log BEGIN SELECT RAISE(ABORT, 'id_access_log is append-only'); END;
