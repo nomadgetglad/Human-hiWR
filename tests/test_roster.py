@@ -427,5 +427,6 @@ def test_chat_refuses_card_numbers_and_strangers(c):
     r = c.post("/api/chat", json={"to": "team", "text": "card 4242 4242 4242 4242"}, headers=H("fry_rosa"))
     assert r.status_code == 400
     assert c.post("/api/chat", json={"to": "nobody_here", "text": "hi"}, headers=H("fry_rosa")).status_code == 404
+    c.post("/api/chat", json={"to": "team", "text": "kept"}, headers=H("fry_rosa"))
     with pytest.raises(Exception):
         appmod.db().execute("DELETE FROM team_messages")
