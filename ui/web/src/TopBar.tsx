@@ -154,10 +154,10 @@ function HiwrButton({ me, go }: { me: Me; go: (s: string) => void }) {
                     } else if (a.id === "import" && me.level >= 2) {
                       setOpen(false);
                       setImporting(true);
-                    } else if (a.id === "mesh" && (me.menu.some((m) => m.id === "staff") || me.level >= 2)) {
-                      // Mesh = the staff organizer: who's on, who's short, cover and requests (Team until there's a schedule)
+                    } else if (a.id === "mesh") {
+                      // Mesh = the staff organizer: team chat, plus who makes what from order history
                       setOpen(false);
-                      go(me.menu.some((m) => m.id === "staff") ? "staff" : "team");
+                      go("mesh");
                     } else if (a.id === "settings" && me.level >= 4) {
                       setOpen(false);
                       go("settings");

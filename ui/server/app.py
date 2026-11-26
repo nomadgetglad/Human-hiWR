@@ -18,6 +18,7 @@ The test restaurant (sample data) keeps the X-Member switcher so demos and tests
 import contextvars
 import itertools
 import os
+import re
 import sqlite3
 import threading
 from pathlib import Path
@@ -114,6 +115,25 @@ def _ensure_upc(d):
         d.commit()
 
 
+def _ensure_team_chat(d):
+    """Team chat under Mesh: one team channel plus one-to-one threads. Append-only: never edited or deleted."""
+    d.executescript("""
+        CREATE TABLE IF NOT EXISTS team_messages (
+            id INTEGER PRIMARY KEY,
+            at TEXT NOT NULL DEFAULT (datetime('now')),
+            sender TEXT NOT NULL,
+            channel TEXT NOT NULL,          -- 'team' or 'dm:<a>|<b>' (ids sorted)
+            text TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS team_messages_channel ON team_messages(channel, id);
+        CREATE TRIGGER IF NOT EXISTS team_messages_no_update BEFORE UPDATE ON team_messages
+            BEGIN SELECT RAISE(ABORT, 'team_messages is append-only'); END;
+        CREATE TRIGGER IF NOT EXISTS team_messages_no_delete BEFORE DELETE ON team_messages
+            BEGIN SELECT RAISE(ABORT, 'team_messages is append-only'); END;
+    """)
+    d.commit()
+
+
 def _log_confirm(p, outcome, detail=None):
     db().execute("INSERT INTO confirm_log(actor, kind, title, outcome, detail) VALUES (?,?,?,?,?)",
                  (p["actor"], p["kind"], p["title"], outcome, detail))
@@ -137,6 +157,7 @@ def reset(sample=True, demo=None):
             STATE["db"] = seed.build() if sample else seed.build_blank(DB_PATH)
         _ensure_confirm_log(STATE["db"])
         _ensure_upc(STATE["db"])
+        _ensure_team_chat(STATE["db"])
         if sample:
             for sku, upc in seed.SAMPLE_UPCS.items():
                 STATE["db"].execute("UPDATE products SET upc=? WHERE sku=?", (upc, sku))
@@ -651,6 +672,58 @@ def mesh_view(x_member: str = Header(None)):
                 "by_item": {k: [name(x) for x in v] for k, v in r["by_item"].items()},
                 "by_member": [{"member": k, "name": _first_name(d, k), "items": v} for k, v in r["by_member"].items()],
                 "best": {k: name(v) for k, v in r["best"].items()}}
+
+
+# ---------------- Team chat (HiWR -> Mesh) ----------------
+# Everyone on the roster can use the team channel and message one person directly. Card numbers and SSNs are
+# refused (the rules say no full card numbers anywhere); pay, money and approvals stay in their own screens.
+
+_CARD = re.compile(r"(?:\d[ -]?){13,19}")
+_SSN = re.compile(r"\d{3}-\d{2}-\d{4}")
+
+
+class ChatPost(BaseModel):
+    to: str
+    text: str
+
+
+def _channel(me_id, to):
+    if to == "team":
+        return "team"
+    if not get_member(db(), to) or to == me_id:
+        raise HTTPException(404, "Pick someone on the team")
+    a, b = sorted([me_id, to])
+    return f"dm:{a}|{b}"
+
+
+@app.get("/api/chat")
+def chat_read(to: str = "team", after: int = 0, x_member: str = Header(None)):
+    with LOCK:
+        m = member(x_member)
+        d = db()
+        ch = _channel(m["id"], to)
+        rows = [{"id": r["id"], "at": r["at"], "from": r["sender"], "name": _first_name(d, r["sender"]), "text": r["text"],
+                 "mine": r["sender"] == m["id"]}
+                for r in d.execute("SELECT * FROM team_messages WHERE channel=? AND id>? ORDER BY id DESC LIMIT 200", (ch, after))]
+        people = [{"id": x["id"], "name": x["name"], "title": x["title"]} for x in roster(d) if x["id"] != m["id"]]
+        return {"channel": ch, "messages": rows[::-1], "people": people}
+
+
+@app.post("/api/chat")
+def chat_post(c: ChatPost, x_member: str = Header(None)):
+    text = (c.text or "").strip()
+    if not text:
+        raise HTTPException(400, "Type a message first")
+    if len(text) > 1000:
+        raise HTTPException(400, "That's too long for one message (1000 characters at most)")
+    if _CARD.search(text) or _SSN.search(text):
+        raise HTTPException(400, "Card numbers and Social Security numbers can't go in chat")
+    with LOCK:
+        m = member(x_member)
+        ch = _channel(m["id"], c.to)
+        mid = db().execute("INSERT INTO team_messages(sender, channel, text) VALUES (?,?,?)", (m["id"], ch, text)).lastrowid
+        db().commit()
+        return {"id": mid}
 
 
 @app.get("/api/staff/fill")

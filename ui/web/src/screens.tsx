@@ -5,6 +5,7 @@ import { api, usd, type Me } from "./api";
 import { useProposals } from "./ConfirmCard";
 import { useT } from "./i18n";
 import { useData } from "./useData";
+import { TeamChat } from "./TeamChat";
 import { BUSINESSES, switchBusiness } from "./TopBar";
 import { IdIntake, IdView } from "./IdCard";
 
@@ -231,6 +232,18 @@ function Pick({ label, value, onChange, options, placeholder }: { label: string;
         </ListBox>
       </Popover>
     </Select>
+  );
+}
+
+// ---------------- Mesh screen (HiWR -> Mesh): team chat + who makes what ----------------
+export function MeshScreen() {
+  const t = useT();
+  return (
+    <section>
+      <h1 className="h1">🕸 {t("Mesh")}</h1>
+      <TeamChat />
+      <MeshPanel />
+    </section>
   );
 }
 

@@ -99,6 +99,15 @@ const es: Record<string, string> = {
   "Pick a job role": "Elige un puesto",
   "Business profile": "Perfil del negocio",
   "Switch business": "Cambiar de negocio",
+  "Team chat": "Chat del equipo",
+  "Whole team": "Todo el equipo",
+  "Conversations": "Conversaciones",
+  "Add people on the Team screen to message them.": "Agrega personas en la pantalla Equipo para escribirles.",
+  "kept on the record; no card numbers. Money and approvals stay on their own screens.":
+    "queda registrado; sin números de tarjeta. Dinero y aprobaciones siguen en sus pantallas.",
+  "No messages yet.": "Aún no hay mensajes.",
+  "Write a message": "Escribe un mensaje",
+  Send: "Enviar",
   "First time? Set up your authenticator (QR code)": "¿Primera vez? Configura tu autenticador (código QR)",
   "The account holder's first code is printed in the app server window. Press Next and the QR code for your authenticator app appears.":
     "El primer código del titular aparece en la ventana del servidor. Pulsa Siguiente y aparece el código QR para tu app de autenticación.",

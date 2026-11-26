@@ -7,7 +7,7 @@ import { LangContext, useT, type Lang } from "./i18n";
 import { SignIn } from "./SignIn";
 import { TopBar } from "./TopBar";
 import { Tour, tourKey } from "./Tour";
-import { Accounting, Assistant, BusinessProfile, CustomerService, Home, Inventory, Prep, Staff, Tasks, Team } from "./screens";
+import { Accounting, Assistant, BusinessProfile, MeshScreen, CustomerService, Home, Inventory, Prep, Staff, Tasks, Team } from "./screens";
 import { useData } from "./useData";
 import "./styles.css";
 
@@ -73,7 +73,7 @@ function App() {
     setSignedIn((n) => n + 1);
   };
   // Only sections the server put on the menu (it hides ones this member can't open or that have nothing in them).
-  const allowed = new Set(["home", ...(me.level >= 4 ? ["settings"] : []), ...me.menu.flatMap((m) => [m.id, ...(m.children ?? [])])]);
+  const allowed = new Set(["home", "mesh", ...(me.level >= 4 ? ["settings"] : []), ...me.menu.flatMap((m) => [m.id, ...(m.children ?? [])])]);
   const invTabs = me.menu.find((m) => m.id === "inventory")?.children ?? [];
   const go = (s: string) => setScreen(allowed.has(s) ? s : "home");
   const view = allowed.has(screen) ? screen : "home";
@@ -108,6 +108,7 @@ function App() {
             {view === "tasks" && <Tasks />}
             {view === "assistant" && <Assistant />}
             {view === "settings" && <BusinessProfile />}
+            {view === "mesh" && <MeshScreen />}
           </main>
           {touring && view === "home" && <Tour me={me} onDone={() => setTouring(false)} />}
           {toast && (

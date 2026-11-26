@@ -410,3 +410,22 @@ def test_test_copy_keeps_sign_in_on_with_demo_data_and_a_guest(monkeypatch):
     finally:
         monkeypatch.delenv("HUMAN_AUTH"); monkeypatch.delenv("HUMAN_GUEST")
         appmod.reset()
+
+
+# ---------- Team chat (HiWR -> Mesh) ----------
+
+def test_team_channel_and_direct_messages(c):
+    assert c.post("/api/chat", json={"to": "team", "text": "Fryer oil changed"}, headers=H("fry_rosa")).status_code == 200
+    team = c.get("/api/chat?to=team", headers=H("chef_marco")).json()
+    assert team["messages"][-1]["name"] == "Rosa" and team["messages"][-1]["mine"] is False
+    assert c.post("/api/chat", json={"to": "chef_marco", "text": "Can I leave at 9?"}, headers=H("fry_rosa")).status_code == 200
+    assert c.get("/api/chat?to=fry_rosa", headers=H("chef_marco")).json()["messages"][-1]["text"] == "Can I leave at 9?"
+    assert c.get("/api/chat?to=fry_rosa", headers=H("stocker_tim")).json()["messages"] == []   # not their thread
+
+
+def test_chat_refuses_card_numbers_and_strangers(c):
+    r = c.post("/api/chat", json={"to": "team", "text": "card 4242 4242 4242 4242"}, headers=H("fry_rosa"))
+    assert r.status_code == 400
+    assert c.post("/api/chat", json={"to": "nobody_here", "text": "hi"}, headers=H("fry_rosa")).status_code == 404
+    with pytest.raises(Exception):
+        appmod.db().execute("DELETE FROM team_messages")
