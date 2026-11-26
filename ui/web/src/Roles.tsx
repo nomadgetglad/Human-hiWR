@@ -43,7 +43,7 @@ export function Roles() {
   const t = useT();
   const { propose, version } = useProposals();
   const v = useData<{ roles: Role[]; max_level: number; level_names: string[] }>("/api/roles", [version]);
-  const [pick, setPick] = useState<string>("");
+  const [pick, setPick] = useState<string>(() => new URLSearchParams(location.search).get("role") ?? "");
   const [name, setName] = useState("");
   const [level, setLevel] = useState("0");
   const [reports, setReports] = useState("none");

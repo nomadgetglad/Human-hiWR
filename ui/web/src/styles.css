@@ -352,3 +352,5 @@ button { font: inherit; }
 .dial input[type=range] { flex: 1; accent-color: var(--hiwr-c, var(--accent)); height: 32px; }
 .dial-num { font-size: 1.8rem; min-width: 2ch; text-align: right; color: var(--hiwr-c, var(--accent)); }
 .refresh-opts { flex-wrap: wrap; }
+
+.field textarea { width: 100%; border-radius: 12px; border: 2px solid var(--line); background: var(--bg); color: var(--text); padding: 10px 14px; font: inherit; resize: vertical; }

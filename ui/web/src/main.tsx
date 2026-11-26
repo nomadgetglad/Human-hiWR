@@ -23,7 +23,7 @@ function App() {
   const [touring, setTouring] = useState(false);
   // First time this person opens the app on this device: start the guided tour on Home
   useEffect(() => {
-    if (me && !localStorage.getItem(tourKey(me))) {
+    if (me && !localStorage.getItem(tourKey(me)) && !new URLSearchParams(location.search).get("screen")) {
       setScreen("home");
       setTouring(true);
     }
