@@ -311,3 +311,13 @@ button { font: inherit; }
 .shift-close { background: var(--panel-2); border-left: 3px solid var(--hiwr-c, var(--accent)); }
 .notice { margin-top: 10px; }
 .w2 { margin-top: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+
+/* ---------- Portfolio ---------- */
+.rpm-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
+.rpm-num b { font-size: 2.4rem; color: var(--hiwr-c, var(--accent)); }
+.next-line { border-top: 1px solid var(--line); padding-top: 8px; margin-top: 8px; }
+.next-up { display: flex; flex-direction: column; align-items: flex-end; text-align: right; }
+.next-up b { font-size: 1.2rem; color: var(--human-c, var(--accent)); }
+.appt { border-top: 1px solid var(--line); padding: 10px 0; }
+.ledger { list-style: none; margin: 4px 0 8px; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; color: var(--muted); }
+.slots .btn { margin-bottom: 6px; }

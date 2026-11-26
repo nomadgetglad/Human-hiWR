@@ -85,6 +85,7 @@ DEMOS = {
     "stew": {"name": "Stew demo", "about": "Restaurant: staff, fryer station, recipes, approvals"},
     "stock": {"name": "Stock house demo", "about": "Warehouse and shelves: pull list, dates, stock moves"},
     "lab": {"name": "Lab demo", "about": "Long jobs: a house build with phases, inspections, subs"},
+    "portfolio": {"name": "Portfolio demo", "about": "Several lines at once: pipe assembly, repair and service, a café, lot tracking"},
 }
 # Sample UPC/EAN numbers for the stock items (made up, valid check digits), so Scan can find them in the demo.
 SAMPLE_UPCS = {"CHIP-01": "012345678905", "SALS-02": "036000291452", "BREW-04": "042100005264",
@@ -102,9 +103,39 @@ def build_demo(kind):
     """One business type's trial demo, in memory. Changes reset when you switch away."""
     if kind == "lab":
         return build_lab()
+    if kind == "portfolio":
+        return build_portfolio()
     if kind not in ("stew", "stock"):
         raise ValueError(f"No demo called {kind}")
     return build(parts={"restaurant"} if kind == "stew" else {"stock"})
+
+
+PORTFOLIO_MEMBERS = [
+    {"id": "owner_alex", "name": "Alex", "title": "Owner", "level": 4, "language": "en"},
+    {"id": "manager_jo", "name": "Jo", "title": "Operations manager", "level": 3, "language": "en"},
+    {"id": "accounting_sue", "name": "Sue", "title": "Bookkeeper", "level": 3, "language": "en"},
+    {"id": "tech_luis", "name": "Luis", "title": "Service technician", "level": 0, "language": "es"},
+    {"id": "assembly_ana", "name": "Ana", "title": "Assembler", "level": 0, "language": "en"},
+    {"id": "server_kim", "name": "Kim", "title": "Server", "level": 0, "language": "en"},
+]
+
+
+def build_portfolio():
+    """Portfolio trial: one account with three lines (pipe assembly, repair and service, a café), lot tracking,
+    appointments with their own bookkeeping, and late fees that wait for a person."""
+    import hiwr_portfolio as pf
+    db = connect(check_same_thread=False)
+    add_plan_owner(db, OWNER, "setup")
+    for m in PORTFOLIO_MEMBERS:
+        add_member(db, m["name"], m["title"], OWNER, m["language"], 0 if m["level"] >= 4 else m["level"], member_id=m["id"],
+                   reason="sample roster")
+    for m in ("manager_jo", "accounting_sue", OWNER):
+        for scope in ("fee", "refund"):
+            certify(db, m, scope, OWNER)
+    pf.seed(db, TODAY)
+    pf.seed_appointments(db, TODAY)
+    db.commit()
+    return db
 
 
 def build_lab():

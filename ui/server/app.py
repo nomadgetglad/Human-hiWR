@@ -30,7 +30,7 @@ from pydantic import BaseModel
 
 from . import seed
 from hiwr_access import level, can_see, LEVEL_NAMES
-from hiwr_contacts import approve, money_action_status, is_certified, check_in, my_day, update_assignment
+from hiwr_contacts import request_money_action, approve, money_action_status, is_certified, check_in, my_day, update_assignment
 from hiwr_staff import staff_section, decide_hr, find_same_night, send_offers
 from hiwr_prep import prep_plan, make_batches
 from hiwr_stew import portions_left, cost_card, check_order_note, explode, sell, unit_cost
@@ -39,6 +39,7 @@ from hiwr_roster import ADD_LEVEL, add_member, check_new_member, get_member, job
 import hiwr_auth as auth
 import hiwr_notices as notices_mod
 import hiwr_taxdocs as taxdocs
+import hiwr_portfolio as pf
 import hiwr_idintake as idin
 from hiwr_vault import Vault
 
@@ -162,6 +163,8 @@ def reset(sample=True, demo=None):
         _ensure_team_chat(STATE["db"])
         notices_mod.ensure(STATE["db"])
         taxdocs.ensure(STATE["db"])
+        pf.ensure(STATE["db"])
+        pf.ensure_appointments(STATE["db"])
         if sample:
             for sku, upc in seed.SAMPLE_UPCS.items():
                 STATE["db"].execute("UPDATE products SET upc=? WHERE sku=?", (upc, sku))
@@ -290,6 +293,8 @@ def sections(d, m):
         menu.append({"id": "prep", "label": "My station"})
     if _any(d, "SELECT 1 FROM recipes WHERE kind='dish'") or _support_requests(d, m):
         menu.append({"id": "cs", "label": "Customer service"})
+    if lvl >= 1 and _any(d, "SELECT 1 FROM pf_lines"):
+        menu.append({"id": "portfolio", "label": "Portfolio"})
     menu.append({"id": "assistant", "label": "Assistant"})   # local model; it sees only what this level may see
     if lvl >= 3 and _any(d, "SELECT 1 FROM money_actions"):
         menu.append({"id": "accounting", "label": "Accounting"})
@@ -560,6 +565,13 @@ def topbar(x_member: str = Header(None)):
         for t in d.execute("SELECT * FROM tickets WHERE status!='closed' ORDER BY priority"):
             if lvl >= 1:
                 notes.append({"kind": "ticket", "text": f"{t['id']} {t['status']}: {t['subject']}", "go": "stew"})
+        if lvl >= 2:
+            for a in _appointments(d):
+                if a["state"] == "alert":
+                    notes.append({"kind": "money", "text": f"Due {a['due_on']}: {a['client']} owes ${a['balance_cents'] / 100:,.2f}. "
+                                  f"Remind today to avoid a ${a['fee_if_late_cents'] / 100:,.2f} late fee", "go": "portfolio"})
+                elif a["state"] == "late_fee_pending":
+                    notes.append({"kind": "money", "text": f"{a['client']} is past due: late fee ready to propose", "go": "portfolio"})
         if lvl >= 3:
             for a in d.execute("SELECT * FROM money_actions"):
                 st = money_action_status(d, a["id"])
@@ -804,6 +816,65 @@ def _wages(d, year):
     # your own account: hourly rate x 1,560 hours as a placeholder until payroll is connected
     return {r["member"]: r["hourly_cents"] * 1560 for r in d.execute("SELECT member, hourly_cents FROM staff")
             if r["hourly_cents"] and get_member(d, r["member"])}
+
+
+# ---------------- Portfolio: lines, RPM per line, lots, appointments with bookkeeping ----------------
+
+def _now_iso():
+    return f"{seed.TODAY}T{STATE['clock']:02d}:00"
+
+
+def _fee_requests(d):
+    """Late fees sent for double approval, by appointment id -> money action status."""
+    out = {}
+    for a in d.execute("SELECT id, ticket_id FROM money_actions WHERE scope='fee' AND ticket_id LIKE 'PF-APPT-%'"):
+        out[int(a["ticket_id"].split("-")[-1])] = money_action_status(d, a["id"])
+    return out
+
+
+def _appointments(d):
+    try:
+        rows = pf.appointments(d, seed.TODAY)
+    except sqlite3.OperationalError:
+        return []
+    req = _fee_requests(d)
+    for a in rows:
+        if a["state"] == "late_fee_pending" and a["id"] in req and req[a["id"]].startswith("PENDING"):
+            a["state"] = "late_fee_awaiting_approval"
+        a["reminder"] = pf.reminder_text(a) if a["state"] in ("alert", "open") and a["balance_cents"] > 0 else None
+    return rows
+
+
+@app.get("/api/portfolio")
+def portfolio_view(x_member: str = Header(None)):
+    """Each line's RPM in its own unit and what's next; margins and money for managers and up; lots for leads and up."""
+    with LOCK:
+        m = member(x_member)
+        need(m, 1, "The portfolio")
+        d = db()
+        v = pf.portfolio(d, _now_iso())
+        money = can_see(d, m["id"], "order_costs")
+        if not money:
+            for x in v["lines"]:
+                for k in ("revenue_cents", "cost_cents", "margin_pct", "avg_ticket_cents"):
+                    x.pop(k, None)
+            v.pop("revenue_cents"); v.pop("cost_cents"); v.pop("margin_pct"); v.pop("mix")
+        v["shows_money"] = money
+        v["lots"] = pf.lots(d)
+        v["appointments"] = _appointments(d) if m["level"] >= 2 else []
+        v["slots"] = {ln: pf.open_slots(d, ln, seed.TODAY, 3) for ln in ("service", "assembly")} if m["level"] >= 2 else {}
+        v["fee_rule"] = {"flat_cents": pf.LATE_FEE_FLAT_CENTS, "pct": pf.LATE_FEE_PCT, "tech_rate_cents": pf.TECH_RATE_CENTS,
+                         "min_hours": pf.MIN_HOURS, "trip_cents": pf.TRIP_FEE_CENTS}
+        return v
+
+
+@app.get("/api/portfolio/tech-fee")
+def tech_fee(hours: float, x_member: str = Header(None)):
+    with LOCK:
+        member(x_member)
+    if not 0 < hours <= 24:
+        raise HTTPException(400, "Hours must be between 0 and 24")
+    return pf.tech_fee(hours)
 
 
 # ---------------- Team chat (HiWR -> Mesh) ----------------
@@ -1214,6 +1285,42 @@ def _card(m, kind, params):
             raise HTTPException(404, "That task is not on your list")
         return {"title": f"Mark done: {t['title']}", "lines": [f"Assigned by {t['assigned_by']}", "They see it as done, with your name and the time"],
                 "fix": [{"field": "note", "label": "Note (optional)", "type": "text"}]}
+    if kind == "book_appointment":
+        need(m, 2, "Booking an appointment")
+        line, start = params.get("line"), str(params.get("starts_at", ""))
+        if start not in pf.open_slots(d, line, seed.TODAY, 10):
+            raise HTTPException(409, "That slot isn't open")
+        client = " ".join(str(params.get("client") or "").split())[:60]
+        if not client:
+            raise HTTPException(400, "Who is the appointment for?")
+        price, dep = int(params.get("price_cents") or 0), int(params.get("deposit_cents") or 0)
+        if price <= 0 or not 0 <= dep <= price:
+            raise HTTPException(400, "Price must be above 0 and the deposit no more than the price")
+        return {"title": f"Book {client}, {start.replace('T', ' ')}",
+                "lines": [f"{params.get('what') or 'Appointment'}: ${price / 100:,.2f}, deposit ${dep / 100:,.2f}",
+                          "Its own ledger starts with the invoice and the deposit; the balance is due 7 days after, on a business day",
+                          f"One business day before it's due, you're alerted to remind them and avoid a late fee"],
+                "fix": [{"field": "client", "label": "Client", "type": "text"}]}
+    if kind == "propose_late_fee":
+        need(m, 2, "Proposing a late fee")
+        a = next((x for x in _appointments(d) if x["id"] == int(params.get("appt_id", 0))), None)
+        if not a or a["state"] != "late_fee_pending":
+            raise HTTPException(409, "No late fee is ready on that appointment")
+        return {"title": f"Propose a ${a['fee_if_late_cents'] / 100:,.2f} late fee for {a['client']}",
+                "lines": [f"${a['balance_cents'] / 100:,.2f} was due {a['due_on']}",
+                          "PENDING - requires double approval: two certified approvers in Accounting",
+                          "It goes on their ledger only after both approve"],
+                "money": True, "fix": []}
+    if kind == "record_payment":
+        need(m, 3, "Recording a payment")
+        a = next((x for x in _appointments(d) if x["id"] == int(params.get("appt_id", 0))), None)
+        amt = int(params.get("amount_cents") or 0)
+        if not a or not 0 < amt <= a["balance_cents"]:
+            raise HTTPException(400, "Pick an appointment with a balance and an amount up to it")
+        return {"title": f"Record ${amt / 100:,.2f} paid by {a['client']}",
+                "lines": [f"Balance ${a['balance_cents'] / 100:,.2f} -> ${(a['balance_cents'] - amt) / 100:,.2f}",
+                          "Records money already received; nothing is charged or sent"],
+                "fix": [{"field": "amount_cents", "label": "Amount (cents)", "type": "number", "min": 1, "max": a["balance_cents"]}]}
     if kind == "post_notice":
         need(m, notices_mod.POST_LEVEL, "Posting a notice")
         week = _week()
@@ -1344,7 +1451,26 @@ def _apply(m, kind, params):
         update_assignment(d, params["assignment_id"], "done", m["id"], params.get("note"))
         return "Marked done"
     if kind == "money_decide":
-        return approve(d, params["money_action_id"], m["id"], params["decision"])
+        out = approve(d, params["money_action_id"], m["id"], params["decision"])
+        a = d.execute("SELECT * FROM money_actions WHERE id=?", (params["money_action_id"],)).fetchone()
+        if a and (a["ticket_id"] or "").startswith("PF-APPT-") and money_action_status(d, a["id"]).startswith("APPROVED"):
+            try:
+                pf.charge_late_fee(d, int(a["ticket_id"].split("-")[-1]), "approved fee", seed.TODAY)
+            except ValueError:
+                pass                      # already paid or charged meanwhile: nothing to add
+        return out
+    if kind == "book_appointment":
+        aid = pf.book(d, params["line"], " ".join(str(params["client"]).split())[:60], params["starts_at"],
+                      params.get("what") or "Appointment", int(params["price_cents"]), int(params.get("deposit_cents") or 0), m["id"])
+        return f"Booked (appointment {aid})"
+    if kind == "propose_late_fee":
+        a = next(x for x in _appointments(d) if x["id"] == int(params["appt_id"]))
+        request_money_action(d, "fee", a["fee_if_late_cents"], f"Late fee: {a['client']}, {a['what']}, due {a['due_on']}",
+                             m["id"], ticket_id=f"PF-APPT-{a['id']}")
+        return "Late fee proposed: PENDING - requires double approval"
+    if kind == "record_payment":
+        pf.record_payment(d, int(params["appt_id"]), int(params["amount_cents"]), m["id"], _now_iso())
+        return "Payment recorded"
     if kind == "post_notice":
         nid = notices_mod.post(d, m["level"], m["id"], "deep_clean", "Deep clean", min(_week()),
                                notices_mod.DEEP_CLEAN_AREAS, _week())

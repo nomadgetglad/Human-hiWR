@@ -23,6 +23,7 @@ export const BUSINESSES: Business[] = [
   { key: "stock", demo: "stock", name: "Stock house demo", detail: "Warehouse and shelves: pull list, dates, stock moves", icon: "📦" },
   { key: "stew", demo: "stew", name: "Stew demo", detail: "Restaurant: staff, fryer station, recipes, approvals", icon: "🍲" },
   { key: "lab", demo: "lab", name: "Lab demo", detail: "Long jobs: a house build with phases, inspections, subs", icon: "🏗" },
+  { key: "portfolio", demo: "portfolio", name: "Portfolio demo", detail: "Pipe assembly, repair and service, a café, lots, appointments", icon: "📊" },
 ];
 
 export function currentBusiness(me: Me): Business {

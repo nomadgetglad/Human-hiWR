@@ -7,6 +7,7 @@ import { LangContext, useT, type Lang } from "./i18n";
 import { SignIn } from "./SignIn";
 import { TopBar } from "./TopBar";
 import { Scene } from "./Scene";
+import { Portfolio } from "./Portfolio";
 import { Tour, tourKey } from "./Tour";
 import { Accounting, Assistant, BusinessProfile, MeshScreen, CustomerService, Home, Inventory, Prep, Staff, Tasks, Team } from "./screens";
 import { useData } from "./useData";
@@ -111,6 +112,7 @@ function App() {
             {view === "settings" && <BusinessProfile />}
             {view === "mesh" && <MeshScreen />}
             {view === "scene" && <Scene go={go} />}
+            {view === "portfolio" && <Portfolio />}
           </main>
           {touring && view === "home" && <Tour me={me} onDone={() => setTouring(false)} />}
           {toast && (

@@ -13,7 +13,7 @@ import { sampleNote, sampleQr, sampleUpc } from "./samples";
 import { BUSINESSES, switchBusiness } from "./TopBar";
 import { IdIntake, IdView } from "./IdCard";
 
-const TILE_ICON: Record<string, string> = { team: "🧑‍🤝‍🧑", staff: "👥", inventory: "📦", prep: "🔥", cs: "💬", accounting: "📒", tasks: "☐", assistant: "✨" };
+const TILE_ICON: Record<string, string> = { portfolio: "📊", team: "🧑‍🤝‍🧑", staff: "👥", inventory: "📦", prep: "🔥", cs: "💬", accounting: "📒", tasks: "☐", assistant: "✨" };
 
 // ---------------- Home: the main menu ----------------
 export function Home({ me, go }: { me: Me; go: (s: string) => void }) {
