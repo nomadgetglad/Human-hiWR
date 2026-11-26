@@ -277,3 +277,11 @@ button { font: inherit; }
 .id-dl dt { color: var(--muted); }
 .id-photo { max-width: 100%; border-radius: 12px; margin-top: 12px; }
 .h3 { font-size: 1rem; margin: 16px 0 6px; }
+
+/* ---------- The two circles (from the menu-dial design): HiWR = input / the record, Human = output ---------- */
+:root { --hiwr-c: #5cc8d6; --hiwr-ink: #04181b; --human-c: #f2b33d; }
+.hiwr-btn { width: 56px; height: 56px; min-height: 56px; padding: 0; border-radius: 50%; border: 3px solid var(--hiwr-c); color: var(--hiwr-c); font-size: 0.78rem; letter-spacing: 0.02em; }
+.hiwr-btn.hiwr-on, .hiwr-btn[data-hovered] { background: var(--hiwr-c); color: var(--hiwr-ink); }
+.hiwr-opt[data-hovered], .hiwr-opt[data-focus-visible] { border-color: var(--hiwr-c); }
+.brand > img { border-radius: 50%; }
+.brand-text > span:first-child { color: var(--human-c); }

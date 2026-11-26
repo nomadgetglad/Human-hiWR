@@ -27,7 +27,7 @@ export const BUSINESSES: Business[] = [
 
 export function currentBusiness(me: Me): Business {
   if (!me.sample) return BUSINESSES[0];
-  return BUSINESSES.find((b) => b.demo === me.demo) ?? { key: "all", demo: null, name: "Human trial demo", detail: "", icon: "🧪" };
+  return BUSINESSES.find((b) => b.demo && b.demo === me.demo) ?? { key: "all", demo: null, name: "Human trial demo", detail: "", icon: "🧪" };
 }
 
 // Switch the whole app to another business, then reload into it. Account holder only (the server checks).
