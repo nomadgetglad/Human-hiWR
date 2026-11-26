@@ -26,6 +26,45 @@ To use the sample restaurant instead (the tests and screenshots use it), start t
 In PowerShell: `$env:HUMAN_DATA="sample"` before the uvicorn line; `Remove-Item Env:HUMAN_DATA` to go back.
 The account holder can also switch with `POST /api/demo/reset?sample=true` or `?sample=false`; neither deletes anything.
 
+## Signing in (your own account)
+
+Your own account needs a real sign-in: first name + a 6-digit code from an authenticator app
+(Google Authenticator, Microsoft Authenticator, 1Password, any TOTP app). No passwords.
+
+1. **First start:** the server window prints the account holder's setup code (`Setup code: ABCD-EFGH`).
+   On your phone, open the app, tap your name, then "First time on this phone? I have a setup code".
+   Type the code, scan the QR code with the authenticator app, type the 6-digit code it shows. Done.
+2. **Everyone else:** in Team, press **Setup code** on their row and confirm. The code shows once; hand it to
+   them in person. They do the same three steps on their phone. Managers give codes to people below their level;
+   only the account holder gives codes to managers.
+3. **Lost phone:** press **Reset** on their row (a new setup code; the old app and their open sessions stop working).
+   The account holder's own reset is done at the server computer: `python -m server.signin_code owner_alex`.
+
+5 wrong codes lock that person for 15 minutes. Sessions last 12 hours. Every setup, sign-in, failure and reset is
+logged with the device and time (`GET /api/auth/history`, and `hiwr_auth.settings_block()` for the settings page).
+
+The secret behind each authenticator and all ID details are encrypted with the key in `ui/human.key`, created on
+first start next to `human.db`. **Back up human.key** (USB stick in the safe). Without it ID records can't be read
+and everyone sets up their authenticator again. Neither file goes in git. Turn on BitLocker on the desktop too.
+
+The sample restaurant keeps the old name switcher so demos and tests can jump between people.
+
+Passkeys (Face ID / fingerprint) can be added later as a second method. Browsers only allow them on https with a
+real name, and the desktop on the shop Wi-Fi is plain http for now.
+
+## Employee ID intake
+
+In Team, **Add ID** on a person's row. Type what's on their ID (kind, legal name, birth date, number, issuer,
+expiry), plus address and emergency contact, an optional photo of the ID (the phone camera opens), and tick
+"I checked work authorization in person". It goes through the confirm card, which shows only the last 4 of the number.
+
+- Managers enter ID for people below their level. Nobody enters their own.
+- Managers then see only: on file, kind of ID, expiry, verified. **Finance and the account holder** press **Open** to
+  see the details and photo, and every opening is logged ("Who opened this").
+- IDs expiring within 30 days show in managers' notifications.
+- Corrections add a new version; nothing is overwritten. Social Security numbers are not collected here
+  (that stays with the payroll provider).
+
 Handy links (sample restaurant): `?as=fry_rosa&screen=prep&lang=es`, `?as=owner_alex`, `?as=manager_jo&screen=accounting`.
 
 ## What is in it
