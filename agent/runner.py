@@ -9,6 +9,7 @@ What stays on this computer no matter the mode: the hiWR data, the access levels
 and the map from labels back to real names. The cloud only ever sees labels.
 """
 import argparse
+import contextlib
 import json
 import sqlite3
 import sys
@@ -36,7 +37,10 @@ def prepare_db(db):
 
 
 class Agent:
-    def __init__(self, db, cfg, requester, backends=None, clock=None, db_path=None, on_cloud_payload=None):
+    def __init__(self, db, cfg, requester, backends=None, clock=None, db_path=None, on_cloud_payload=None, lock=None):
+        # lock: when the database is shared (the web app), every read and write takes it, so the model's
+        # thinking time never blocks anyone else. The caller holds it while building the Agent.
+        self.lock = lock or contextlib.nullcontext()
         self.db, self.cfg, self.requester = prepare_db(db), cfg, requester
         self.people = privacy.people_from_db(db, cfg["privacy"]["extra_names"], cfg["privacy"]["hide_vendors"])
         kw = {"clock": clock} if clock else {}
@@ -87,19 +91,23 @@ class Agent:
         if note:
             reply = f"{note}\n\n{reply}"
         self.last_route = {"backend": backend, "methods": methods, "why": why}
+        with self.lock:
+            self._log(lvl, backend, why)
+        self.history.append((text, reply))
+        return reply
+
+    def _log(self, lvl, backend, why):
         self.db.execute("INSERT INTO agent_log(requester, level, backend, model, route_why, tools, hidden) VALUES (?,?,?,?,?,?,?)",
                         (self.requester, lvl, backend, self.backends[backend].model, why,
                          json.dumps(self.tools.calls), self.pz.hidden_count))
         self.db.commit()
-        self.history.append((text, reply))
-        return reply
 
     def _run(self, backend, system, user):
         b = self.backends[backend]
         specs = self.tools.specs()
         if backend == "local":
             hist = [m for u, r in self.history for m in ({"role": "user", "content": u}, {"role": "assistant", "content": r})]
-            return b.turn(system, hist, user, specs, self.tools.call)
+            return b.turn(system, hist, user, specs, self._call)
         pz = self.pz
         hist = [m for u, r in self.history
                 for m in ({"role": "user", "content": pz.hide(u)}, {"role": "assistant", "content": pz.hide(r)})]
@@ -108,13 +116,19 @@ class Agent:
             self.on_cloud_payload(hidden_user)
 
         def execute(name, args):
-            result = self.tools.call(name, pz.restore_args(args))
+            result = self._call(name, pz.restore_args(args))
             out = pz.hide_obj(result)
             if self.on_cloud_payload:
                 self.on_cloud_payload(f"[tool {name}] " + json.dumps(out, default=str)[:2000])
             return out
 
         return pz.show(b.turn(pz.hide(system), hist, hidden_user, specs, execute))
+
+    def _call(self, name, args):
+        with self.lock:
+            out = self.tools.call(name, args)
+            self.db.commit()       # a tool that writes (a ticket, a proposal) is saved before the lock opens
+            return out
 
     def _approval_guard(self, reply):
         """Every money or authority item filed this turn shows up as pending, with its approvers."""

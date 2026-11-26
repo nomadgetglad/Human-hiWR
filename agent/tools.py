@@ -162,9 +162,13 @@ class Toolbox:
                  description="Business phone, text number, hours and on-duty manager, as the owner entered them.",
                  parameters=S({})),
             dict(name="request_live_person", level=0, fn=self.request_live_person,
-                 description="Queue a call, callback or text with a person. Nothing is sent automatically.",
+                 description="Queue a call, callback or text with a person. Nothing is sent automatically. "
+                             "route_to customer_service is the default for an employee who needs human support "
+                             "from the business (pay, schedule, HR, account, equipment); it shows in the app's "
+                             "Customer service section.",
                  parameters=S({"channel": {"type": "string", "enum": ["call", "callback", "text"]},
-                               "route_to": {"type": "string", "enum": ["on_duty_manager", "owner", "approvers"]},
+                               "route_to": {"type": "string", "enum": ["customer_service", "on_duty_manager", "owner",
+                                                                       "approvers"]},
                                "reason": s, "contact": s, "best_time": s, "ticket_id": s}, ["channel", "route_to"])),
             dict(name="write_draft", level=0, fn=self.write_draft,
                  description="Save a draft (message, notice, summary, JSON) to the data folder's drafts/ for a person "

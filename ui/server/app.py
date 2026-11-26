@@ -15,6 +15,7 @@ Sign-in is a sample switcher (X-Member header). Real sign-in comes later.
 """
 import itertools
 import os
+import sqlite3
 import threading
 from pathlib import Path
 
@@ -28,14 +29,16 @@ from hiwr_access import level, can_see, LEVEL_NAMES
 from hiwr_contacts import approve, money_action_status, is_certified, check_in, my_day, update_assignment
 from hiwr_staff import staff_section, decide_hr, find_same_night, send_offers
 from hiwr_prep import prep_plan, make_batches
-from hiwr_stew import portions_left, cost_card, check_order_note
+from hiwr_stew import portions_left, cost_card, check_order_note, explode, sell
 from hiwr_warehouse import pull_list, record_pull
-from hiwr_roster import add_member, check_new_member, get_member, roster
+from hiwr_roster import ADD_LEVEL, add_member, check_new_member, get_member, job_roles, roster
 
 app = FastAPI(title="Human (HiWR) sample UI")
 LOCK = threading.Lock()
 STATE = {}
 PROPOSALS = {}
+CHATS = {}                     # assistant: member id -> {"agent": Agent, "busy": bool}
+CHATS_LOCK = threading.Lock()
 _ids = itertools.count(1)
 PREP_ITEM = "fried tortilla chips"
 
@@ -44,16 +47,63 @@ PREP_ITEM = "fried tortilla chips"
 DB_PATH = os.environ.get("HUMAN_DB", str(Path(__file__).resolve().parents[1] / "human.db"))
 
 
-def reset(sample=True):
+def _ensure_confirm_log(d):
+    """Every confirm-card outcome (confirmed, refused on re-check, cancelled), kept for the Business profile.
+    Append-only: history is never overwritten."""
+    d.executescript("""
+        CREATE TABLE IF NOT EXISTS confirm_log (
+            id INTEGER PRIMARY KEY,
+            at TEXT NOT NULL DEFAULT (datetime('now')),
+            actor TEXT NOT NULL,
+            kind TEXT NOT NULL,
+            title TEXT NOT NULL,
+            outcome TEXT NOT NULL CHECK (outcome IN ('confirmed', 'refused', 'cancelled')),
+            detail TEXT
+        );
+        CREATE TRIGGER IF NOT EXISTS confirm_log_no_update BEFORE UPDATE ON confirm_log
+            BEGIN SELECT RAISE(ABORT, 'confirm_log is append-only'); END;
+        CREATE TRIGGER IF NOT EXISTS confirm_log_no_delete BEFORE DELETE ON confirm_log
+            BEGIN SELECT RAISE(ABORT, 'confirm_log is append-only'); END;
+    """)
+    d.commit()
+
+
+def _ensure_upc(d):
+    """Products can carry the UPC/EAN printed on their label, so Scan finds them."""
+    cols = [r[1] for r in d.execute("PRAGMA table_info(products)")]
+    if cols and "upc" not in cols:
+        d.execute("ALTER TABLE products ADD COLUMN upc TEXT")
+        d.commit()
+
+
+def _log_confirm(p, outcome, detail=None):
+    db().execute("INSERT INTO confirm_log(actor, kind, title, outcome, detail) VALUES (?,?,?,?,?)",
+                 (p["actor"], p["kind"], p["title"], outcome, detail))
+    db().commit()
+
+
+def reset(sample=True, demo=None):
     """sample=True loads the test restaurant (tests and demos), in memory. sample=False opens your own
-    account from DB_PATH: empty the first time, and whatever you added since then after that."""
+    account from DB_PATH: empty the first time, and whatever you added since then after that.
+    demo="stew" | "stock" | "lab" loads that business type's trial demo (in memory) instead."""
     with LOCK:
         if STATE.get("db") is not None:
             STATE["db"].close()
         STATE.clear()
         PROPOSALS.clear()
-        STATE["db"] = seed.build() if sample else seed.build_blank(DB_PATH)
+        CHATS.clear()                # conversations belong to the data they were about
+        if demo:
+            STATE["db"], sample = seed.build_demo(demo), True
+        else:
+            STATE["db"] = seed.build() if sample else seed.build_blank(DB_PATH)
+        _ensure_confirm_log(STATE["db"])
+        _ensure_upc(STATE["db"])
+        if sample:
+            for sku, upc in seed.SAMPLE_UPCS.items():
+                STATE["db"].execute("UPDATE products SET upc=? WHERE sku=?", (upc, sku))
+            STATE["db"].commit()
         STATE["sample"] = sample
+        STATE["demo"] = demo
         STATE["clock"] = 16          # prep clock hour, sample
 
 
@@ -89,33 +139,83 @@ def members():
         return [{k: m[k] for k in ("id", "name", "title", "language")} for m in roster(db())]
 
 
+def _any(d, sql, args=()):
+    try:
+        return d.execute(sql, args).fetchone() is not None
+    except sqlite3.OperationalError:      # table not there yet: nothing to work on
+        return False
+
+
+def sections(d, m):
+    """The menu for this member: a section shows only when their level can open it AND there is something in it
+    to work on. Team (managers and up) and the Assistant always show: they are how you start."""
+    lvl, me_id = m["level"], m["id"]
+    menu = []
+    if lvl >= 2:
+        menu.append({"id": "team", "label": "Team"})   # adding people is where it starts
+    if lvl >= 1:
+        staff_work = _any(d, "SELECT 1 FROM staffing_rules") or _any(d, "SELECT 1 FROM staff") \
+            or _any(d, "SELECT 1 FROM hr_requests")
+    else:
+        staff_work = _any(d, "SELECT 1 FROM staff_availability WHERE member=? AND day=?", (me_id, seed.TODAY)) \
+            or _any(d, "SELECT 1 FROM hr_requests WHERE member=?", (me_id,)) \
+            or _any(d, "SELECT 1 FROM order_stage_events WHERE actor=? AND stage='cooking'", (me_id,))
+    if staff_work:
+        menu.append({"id": "staff", "label": "Staff"})
+    inv = []
+    if _any(d, "SELECT 1 FROM products"):
+        inv.append("warehouse")
+    if _any(d, "SELECT 1 FROM recipes") or _any(d, "SELECT 1 FROM materials"):
+        inv.append("stew")
+    if _any(d, "SELECT 1 FROM lab_projects"):
+        inv.append("lab")
+    if inv:
+        menu.append({"id": "inventory", "label": "Inventory", "children": inv})
+    if _has_prep(d) and (lvl >= 2 or _any(d, "SELECT 1 FROM staff WHERE member=? AND role='cook'", (me_id,))):
+        menu.append({"id": "prep", "label": "My station"})
+    if _any(d, "SELECT 1 FROM recipes WHERE kind='dish'") or _support_requests(d, m):
+        menu.append({"id": "cs", "label": "Customer service"})
+    menu.append({"id": "assistant", "label": "Assistant"})   # local model; it sees only what this level may see
+    if lvl >= 3 and _any(d, "SELECT 1 FROM money_actions"):
+        menu.append({"id": "accounting", "label": "Accounting"})
+    if lvl < 2 and my_day(d, me_id, seed.TODAY):
+        menu.append({"id": "tasks", "label": "My tasks"})
+    return menu
+
+
 @app.get("/api/me")
 def me(x_member: str = Header(None)):
     with LOCK:
         m = member(x_member)
-        menu = [{"id": "team", "label": "Team"}] if m["level"] >= 2 else []   # adding people is where it starts
-        menu += [
-            {"id": "staff", "label": "Staff"},
-            {"id": "inventory", "label": "Inventory", "children": ["warehouse", "stew", "lab"]},
-            {"id": "prep", "label": "My station"},
-            {"id": "cs", "label": "Customer service"},
-        ]
-        if m["level"] >= 3:
-            menu.append({"id": "accounting", "label": "Accounting"})
+        menu = sections(db(), m)
         open_cards = sum(1 for p in PROPOSALS.values() if p["actor"] == m["id"] and p["state"] == "open")
         return {**m, "menu": menu, "today": seed.TODAY, "clock": STATE["clock"], "open_cards": open_cards,
-                "sample": STATE["sample"]}
+                "sample": STATE["sample"], "demo": STATE.get("demo")}
 
 
 @app.post("/api/demo/reset")
-def demo_reset(sample: bool | None = None, x_member: str = Header(None)):
-    """Account holder only. ?sample=true switches to the test restaurant, ?sample=false to your own (saved) account.
+def demo_reset(sample: bool | None = None, demo: str | None = None, x_member: str = Header(None)):
+    """Account holder only. ?sample=true switches to the test restaurant, ?sample=false to your own (saved) account,
+    ?demo=stew|stock|lab to that business type's trial demo (offered before a plan is bought).
     Nothing is deleted: your own account file is only opened, never wiped."""
     with LOCK:
-        need(member(x_member), 4, "Resetting the data")
-        keep = STATE["sample"]
-    reset(keep if sample is None else sample)
-    return {"ok": True, "sample": STATE["sample"]}
+        need(member(x_member), 4, "Switching business")
+        if demo is not None and demo not in seed.DEMOS:
+            raise HTTPException(400, f"No demo called {demo}. Pick one of: {', '.join(seed.DEMOS)}")
+        keep, keep_demo = STATE["sample"], STATE.get("demo")
+    if demo:
+        reset(demo=demo)
+    elif sample is None:
+        reset(keep, keep_demo)
+    else:
+        reset(sample)
+    return {"ok": True, "sample": STATE["sample"], "demo": STATE["demo"]}
+
+
+@app.get("/api/demos")
+def demos():
+    """The trial demos a new business can try before buying a plan."""
+    return [{"id": k, **v} for k, v in seed.DEMOS.items()]
 
 
 class Clock(BaseModel):
@@ -130,12 +230,16 @@ def demo_clock(c: Clock, x_member: str = Header(None)):
         if not (STATE["clock"] <= c.hour <= 22):
             raise HTTPException(400, f"The clock only moves forward, from {STATE['clock']}:00 to 22:00")
         STATE["clock"] = c.hour
-        if STATE["sample"]:            # sample POS sales only exist in the test restaurant
+        if STATE["sample"] and STATE.get("demo") in (None, "stew"):   # sample POS sales: restaurant only
             seed.add_today_sales(db(), c.hour)
         return {"clock": c.hour}
 
 
 # ---------------- Top bar: notifications + one key number that depends on the level ----------------
+
+def _restaurant_sample():
+    return STATE["sample"] and STATE.get("demo") in (None, "stew")
+
 
 def _price(d, dish):
     r = d.execute("SELECT price_cents FROM recipes WHERE name=?", (dish,)).fetchone()
@@ -149,7 +253,7 @@ def _revenue(d, day, upto=24):
 def _forecast_revenue(d, upto=24):
     """Same weekday, last 4 weeks, dinner scaled by tonight's reservations vs usual."""
     from datetime import date, timedelta
-    scale = seed.RESERVATIONS / seed.USUAL_RESERVATIONS if STATE["sample"] else 1.0
+    scale = seed.RESERVATIONS / seed.USUAL_RESERVATIONS if _restaurant_sample() else 1.0
     total = 0.0
     for w in range(1, 5):
         day = (date.fromisoformat(seed.TODAY) - timedelta(weeks=w)).isoformat()
@@ -178,7 +282,7 @@ def topbar(x_member: str = Header(None)):
             stats = [{"label": "Revenue today", "value": rev, "format": "usd",
                       "detail": f"{round(rev / fc_now * 100) if fc_now else 0}% of forecast so far"},
                      {"label": "Forecast tonight", "value": fc_day, "format": "usd",
-                      "detail": f"{seed.RESERVATIONS} reservations vs usual {seed.USUAL_RESERVATIONS}" if STATE["sample"]
+                      "detail": f"{seed.RESERVATIONS} reservations vs usual {seed.USUAL_RESERVATIONS}" if _restaurant_sample()
                       else ("same day, last 4 weeks" if fc_day else "no sales history yet")}]
             if not fc_now:
                 stats[0]["detail"] = "no sales yet" if not rev else "no forecast yet"
@@ -250,7 +354,7 @@ def team(x_member: str = Header(None)):
         roles = sorted({r[0] for r in d.execute("SELECT role FROM staffing_rules UNION SELECT role FROM staff")}
                        | {"cook", "dishwasher", "server", "host", "bartender", "prep"})
         return {"members": roster(d, show_pay=m["level"] >= 3), "can_set_level": m["level"] >= 4,
-                "can_set_pay": m["level"] >= 3, "roles": roles}
+                "can_set_pay": m["level"] >= 3, "roles": roles, "job_roles": job_roles(d)}
 
 
 # ---------------- Staff ----------------
@@ -275,6 +379,33 @@ def staff(x_member: str = Header(None)):
         offers = [dict(r) for r in d.execute(
             "SELECT c.name, o.role, o.sent_at, o.hold_until, o.answer FROM shift_offers o JOIN candidates c ON c.id=o.candidate_id")]
         return {"view": "team", **v, "hr_requests": hr, "callouts": callouts, "offers": offers}
+
+
+# ---------------- Mesh: staff organizer from the history between employees and sales ----------------
+
+def _first_name(d, mid):
+    r = d.execute("SELECT first_name FROM members WHERE id=?", (mid,)).fetchone()
+    return r["first_name"] if r else mid.split("_")[-1].capitalize()
+
+
+@app.get("/api/mesh")
+def mesh_view(x_member: str = Header(None)):
+    """Who makes what, how fast and how often it's remade, refreshed from order history. Leads and up see the
+    whole team; staff see only their own items."""
+    from hiwr_mesh import mesh
+    with LOCK:
+        m = member(x_member)
+        d = db()
+        own = m["level"] < 1
+        try:
+            r = mesh(d, member=m["id"] if own else None)
+        except sqlite3.OperationalError:
+            r = {"by_item": {}, "by_member": {}, "best": {}, "lines": 0}
+        name = lambda x: {**x, "name": _first_name(d, x["member"])}
+        return {"own": own, "lines": r["lines"],
+                "by_item": {k: [name(x) for x in v] for k, v in r["by_item"].items()},
+                "by_member": [{"member": k, "name": _first_name(d, k), "items": v} for k, v in r["by_member"].items()],
+                "best": {k: name(v) for k, v in r["best"].items()}}
 
 
 @app.get("/api/staff/fill")
@@ -340,13 +471,94 @@ def warehouse(x_member: str = Header(None)):
 
 @app.get("/api/inventory/lab")
 def lab(x_member: str = Header(None)):
+    """Long jobs (house builds): phases with inspection gates, subs, and open tickets. Dollars (contract,
+    labor, sub amounts) only for those who may see order costs."""
+    from hiwr_lab import job_cost
     with LOCK:
-        member(x_member)
-        return {"jobs": [], "note": "Lab is for long jobs (house builds: phases, inspections, subs). "
-                                    "This restaurant has none. The screens come in a later pass, wired to hiwr_lab.py."}
+        m = member(x_member)
+        d = db()
+        costs = can_see(d, m["id"], "order_costs")
+        jobs = []
+        for p in d.execute("SELECT * FROM lab_projects ORDER BY id"):
+            phases = []
+            for row, ph in zip(job_cost(d, p["id"]), d.execute("SELECT * FROM lab_phases WHERE project_id=? ORDER BY seq", (p["id"],))):
+                started = d.execute("SELECT 1 FROM lab_phase_events WHERE phase_id=? AND event='started'", (ph["id"],)).fetchone()
+                status = {"pass": "passed", "fail": "failed"}.get(row["status"], "in progress" if started else "not started")
+                item = {"seq": ph["seq"], "phase": row["phase"], "inspection": row["inspection"], "status": status}
+                if costs:
+                    item.update(labor=row["labor"], labor_budget=row["labor_budget"], subs=row["subs"], over=row["over"])
+                phases.append(item)
+            subs = [{"sub": r["sub"], "scope": r["scope"], **({"amount": r["amount_cents"]} if costs else {})}
+                    for r in d.execute("SELECT * FROM lab_subcontracts WHERE project_id=? ORDER BY id", (p["id"],))]
+            job = {"id": p["id"], "name": p["name"], "permit": p["permit_number"], "starts_on": p["starts_on"],
+                   "target_end": p["target_end"], "phases": phases, "subs": subs}
+            if costs:
+                job["contract"] = p["contract_cents"]
+            jobs.append(job)
+        tickets = [{"id": t["id"], "type": t["type"], "status": t["status"], "subject": t["subject"]}
+                   for t in d.execute("SELECT * FROM tickets WHERE status!='closed' ORDER BY priority")]
+        return {"jobs": jobs, "shows_costs": costs, "tickets": tickets,
+                "note": "" if jobs else "Lab is for long jobs (house builds: phases, inspections, subs). None yet."}
+
+
+# ---------------- Scan (HiWR button) ----------------
+# The browser reads the QR code, barcode or text itself; only the decoded text comes here, to look it up in
+# this business's records. Prices and costs are left out below Manager level.
+
+class ScanLookup(BaseModel):
+    code: str
+    kind: str | None = None
+
+
+@app.post("/api/scan/lookup")
+def scan_lookup(q: ScanLookup, x_member: str = Header(None)):
+    code = (q.code or "").strip()[:500]
+    with LOCK:
+        m = member(x_member)
+        d = db()
+        if not code:
+            return {"matches": []}
+        like = f"%{code}%"
+        out = []
+        digits = "".join(ch for ch in code if ch.isdigit())
+        try:
+            for r in d.execute("SELECT * FROM products WHERE sku=? COLLATE NOCASE OR name LIKE ? "
+                               "OR (? != '' AND ltrim(upc, '0') = ltrim(?, '0')) LIMIT 10", (code, like, digits, digits)):
+                out.append({"type": "Product", "id": r["sku"], "title": r["name"],
+                            "detail": f"shelf {r['shelf']}, back stock {r['back_stock']}"
+                                      + (f", dated {r['expires_on']}" if "expires_on" in r.keys() and r["expires_on"] else "")})
+        except sqlite3.OperationalError:
+            pass
+        for r in d.execute("SELECT id, type, status, subject FROM tickets WHERE id=? COLLATE NOCASE OR subject LIKE ? LIMIT 10",
+                           (code, like)):
+            out.append({"type": "Ticket", "id": r["id"], "title": r["subject"], "detail": f"{r['type']} · {r['status']}"})
+        for r in d.execute("SELECT name, kind FROM recipes WHERE name LIKE ? LIMIT 10", (like,)):
+            out.append({"type": "Dish" if r["kind"] == "dish" else "Recipe", "id": r["name"], "title": r["name"],
+                        "detail": r["kind"]})
+        return {"matches": out}
 
 
 # ---------------- Customer service ----------------
+
+def _support_requests(d, m):
+    """Requests for a person that the assistant queued (agent_handoffs). Managers and up see the queue;
+    everyone else sees only their own. Nothing here sends anything: a person follows up."""
+    sql = "SELECT id, at, requested_for, channel, route_to, reason, best_time, ticket_id, status FROM agent_handoffs"
+    args = ()
+    if m["level"] < 2:
+        sql, args = sql + " WHERE requested_for=?", (m["id"],)
+    try:
+        return [dict(r) for r in d.execute(sql + " ORDER BY id DESC LIMIT 100", args)]
+    except sqlite3.OperationalError:          # the assistant hasn't run on this data yet
+        return []
+
+
+@app.get("/api/cs/support")
+def cs_support(x_member: str = Header(None)):
+    with LOCK:
+        m = member(x_member)
+        return {"requests": _support_requests(db(), m), "queue": m["level"] >= 2}
+
 
 @app.get("/api/cs/dishes")
 def cs_dishes(x_member: str = Header(None)):
@@ -392,7 +604,17 @@ class Propose(BaseModel):
     params: dict
 
 
+LEVEL_SEES = {0: "own schedule, own tasks, ticket status", 1: "team schedule, inventory counts, roll call",
+              2: "client records, order costs, vendor prices, purchase drafts",
+              3: "payroll, money actions, ticket financial blocks",
+              4: "everything, and sets everyone's level"}
+
+
 def _new_member(m, params):
+    # The job role comes from the pick list, set by a manager or the account holder only.
+    need(m, ADD_LEVEL, "Setting someone's job role")
+    if " ".join((params.get("title") or "").split()) not in job_roles(db()):
+        raise HTTPException(400, "Pick the job role from the list")
     try:
         return check_new_member(db(), params.get("first_name"), params.get("title"), m["id"], params.get("language", "en"),
                                 params.get("level") or 0, params.get("role"), params.get("hourly_cents"),
@@ -410,14 +632,11 @@ def _card(m, kind, params):
         v = _new_member(m, params)
         lines = [f"Adds {v['first_name']} as {v['title']}, level {v['level']} {LEVEL_NAMES[v['level']]}",
                  f"Signs in as {v['id']} and opens in {'Spanish' if v['language'] == 'es' else 'English'}",
-                 "Sees: " + {0: "own schedule, own tasks, ticket status", 1: "team schedule, inventory counts, roll call",
-                             2: "client records, order costs, vendor prices, purchase drafts",
-                             3: "payroll, money actions, ticket financial blocks"}[v["level"]]]
+                 "Sees: " + LEVEL_SEES[v["level"]]]
         if v["role"]:
             lines.append(f"On the schedule as {v['role']} at ${v['hourly_cents'] / 100:.2f}/h")
         lines.append("Logged under your name; never edited or deleted")
-        fix = [{"field": "first_name", "label": "First name", "type": "text"},
-               {"field": "title", "label": "Job title", "type": "text"}]
+        fix = [{"field": "first_name", "label": "First name", "type": "text"}]
         if m["level"] >= 4:
             fix.append({"field": "level", "label": "Level (0-3)", "type": "number", "min": 0, "max": 3})
         if m["level"] >= 3:
@@ -506,7 +725,68 @@ def _card(m, kind, params):
             raise HTTPException(404, "That task is not on your list")
         return {"title": f"Mark done: {t['title']}", "lines": [f"Assigned by {t['assigned_by']}", "They see it as done, with your name and the time"],
                 "fix": [{"field": "note", "label": "Note (optional)", "type": "text"}]}
+    if kind == "import_sales":
+        need(m, 2, "Importing sales")
+        v = _resolve_sales(d, params.get("rows"))
+        if not v["dishes"] and not v["products"]:
+            raise HTTPException(400, "Nothing in this file matches your dishes or products"
+                                     + (f" (not found: {', '.join(v['unknown'][:5])})" if v["unknown"] else ""))
+        lines = [f"Registers {v['plates']} plates and {v['units']} store units from {v['count']} sales lines"]
+        for mat, (before, used, unit) in sorted(v["materials"].items(), key=lambda x: -x[1][1])[:8]:
+            lines.append(f"{mat}: {before:g} -> {before - used:g} {unit}" + ("  (more sold than on hand: count it)" if used > before else ""))
+        for sku, (name, before, qty) in v["shelves"].items():
+            lines.append(f"{name}: shelf {before} -> {max(0, before - qty)}" + ("  (more sold than on the shelf: count it)" if qty > before else ""))
+        if v["unknown"]:
+            lines.append(f"Left out, not found: {', '.join(v['unknown'][:6])}" + (" ..." if len(v["unknown"]) > 6 else ""))
+        lines.append("Logged as sales moves under your name; nothing is paid or sent")
+        return {"title": f"Import {v['count']} sales lines into inventory", "lines": lines, "fix": []}
     raise HTTPException(400, f"Unknown change: {kind}")
+
+
+def _resolve_sales(d, rows):
+    """Match sales-register lines (item name, SKU or UPC, and a quantity) to dishes and store products, and work
+    out what each one takes out of inventory. Reads only."""
+    if not isinstance(rows, list) or not rows:
+        raise HTTPException(400, "No sales lines in the file")
+    if len(rows) > 5000:
+        raise HTTPException(400, "That's more than 5000 lines; split the file")
+    dishes, products, unknown = {}, {}, []
+    for r in rows:
+        name = str((r or {}).get("item") or "").strip()
+        try:
+            qty = int(float(r.get("qty", 1)))
+        except (TypeError, ValueError):
+            raise HTTPException(400, f"Quantity for {name or 'a line'} isn't a number")
+        if not name or qty <= 0:
+            continue
+        hour = r.get("hour")
+        dish = d.execute("SELECT name FROM recipes WHERE kind='dish' AND name=? COLLATE NOCASE", (name,)).fetchone()
+        if dish:
+            dishes.setdefault((dish["name"], hour), 0)
+            dishes[(dish["name"], hour)] += qty
+            continue
+        digits = "".join(ch for ch in name if ch.isdigit())
+        try:
+            prod = d.execute("SELECT * FROM products WHERE sku=? COLLATE NOCASE OR name=? COLLATE NOCASE "
+                             "OR (? != '' AND ltrim(upc,'0') = ltrim(?,'0'))", (name, name, digits, digits)).fetchone()
+        except sqlite3.OperationalError:
+            prod = None
+        if prod:
+            products[prod["sku"]] = products.get(prod["sku"], 0) + qty
+        elif name not in unknown:
+            unknown.append(name)
+    materials = {}
+    for (dish, _), qty in dishes.items():
+        for mat, (q, unit, via) in explode(d, dish).items():
+            on = d.execute("SELECT on_hand FROM materials WHERE material=?", (mat,)).fetchone()["on_hand"]
+            before, used, _u = materials.get(mat, (on, 0.0, unit))
+            materials[mat] = (before, round(used + q * qty, 3), unit)
+    shelves = {}
+    for sku, qty in products.items():
+        p = d.execute("SELECT name, shelf FROM products WHERE sku=?", (sku,)).fetchone()
+        shelves[sku] = (p["name"], p["shelf"], qty)
+    return {"dishes": dishes, "products": products, "unknown": unknown, "materials": materials, "shelves": shelves,
+            "plates": sum(dishes.values()), "units": sum(products.values()), "count": len(rows)}
 
 
 def _apply(m, kind, params):
@@ -537,6 +817,17 @@ def _apply(m, kind, params):
         return "Marked done"
     if kind == "money_decide":
         return approve(d, params["money_action_id"], m["id"], params["decision"])
+    if kind == "import_sales":
+        v = _resolve_sales(d, params.get("rows"))
+        for (dish, hour), qty in v["dishes"].items():
+            sell(d, dish, qty, now_iso(), f"import by {m['id']}")
+            h = int(hour) if str(hour or "").isdigit() and 0 <= int(hour) <= 23 else STATE["clock"]
+            d.execute("INSERT INTO dish_sales VALUES (?,?,?,?)", (seed.TODAY, h, dish, qty))
+        for sku, qty in v["products"].items():
+            d.execute("UPDATE products SET shelf = MAX(0, shelf - ?) WHERE sku=?", (qty, sku))
+            d.execute("INSERT INTO daily_sales(sku, day, units) VALUES (?,?,?) "
+                      "ON CONFLICT(sku, day) DO UPDATE SET units = units + excluded.units", (sku, seed.TODAY, qty))
+        return f"Imported {v['plates']} plates and {v['units']} store units; inventory updated"
 
 
 @app.post("/api/proposals")
@@ -556,16 +847,23 @@ def confirm(pid: int, x_member: str = Header(None)):
         p = PROPOSALS.get(pid)
         if not p or p["actor"] != m["id"] or p["state"] != "open":
             raise HTTPException(404, "This card is no longer open")
-        _card(m, p["kind"], p["params"])          # re-check: data may have changed since the card was made
         try:
+            _card(m, p["kind"], p["params"])      # re-check: data may have changed since the card was made
             result = _apply(m, p["kind"], p["params"])
+        except HTTPException as e:
+            db().rollback()
+            _log_confirm(p, "refused", str(e.detail))
+            raise
         except PermissionError as e:
             db().rollback()
+            _log_confirm(p, "refused", str(e))
             raise HTTPException(403, str(e))
         except (LookupError, ValueError) as e:
             db().rollback()
+            _log_confirm(p, "refused", str(e))
             raise HTTPException(400, str(e))
         db().commit()
+        _log_confirm(p, "confirmed", str(result) if result is not None else None)
         p.update(state="confirmed", result=result)
         return p
 
@@ -577,6 +875,7 @@ def cancel(pid: int, x_member: str = Header(None)):
         p = PROPOSALS.get(pid)
         if p and p["actor"] == m["id"] and p["state"] == "open":
             p["state"] = "cancelled"
+            _log_confirm(p, "cancelled")
         return {"ok": True}
 
 
@@ -597,6 +896,180 @@ def checkin(pid: int, c: CheckIn, x_member: str = Header(None)):
         db().commit()
         p["checkin"] = status
         return {"status": status}
+
+
+# ---------------- Business profile (the Human logo; account holder only) ----------------
+
+def _file_levels():
+    """Which business files each level may open, from the assistant's config (read only here)."""
+    import tomllib
+    agent_dir = Path(__file__).resolve().parents[2] / "agent"
+    for name in ("config.toml", "config.example.toml"):
+        f = agent_dir / name
+        if f.exists():
+            try:
+                with open(f, "rb") as fh:
+                    cfg = tomllib.load(fh)
+                return {"mode": cfg.get("mode", "local"), "business": cfg.get("business", {}),
+                        "files": sorted(([k, int(v)] for k, v in cfg.get("files", {}).get("levels", {}).items()),
+                                        key=lambda x: (-x[1], x[0]))}
+            except (OSError, ValueError):
+                break
+    return {"mode": "local", "files": [], "business": {}}
+
+
+def _suggestions(d, team, files, log):
+    """Tips for getting more out of the app, from what is (and isn't) set up yet. Most useful first."""
+    tips = []
+    if STATE.get("sample"):
+        tips.append(["demo", "You're in a demo. Try a confirm card (fry a batch, pull stock, approve a refund) "
+                             "and watch it land in Confirmations below. Switch back to your business from the logo."])
+    if len(team) < 2:
+        tips.append(["team", "Add the people who work with you on the Team screen. Most sections stay hidden "
+                             "until there's someone and something to work on."])
+    if sum(1 for x in team if x["level"] >= 3) < 2:
+        tips.append(["approvers", "Money needs two certified approvers. Raise two trusted people to Finance level "
+                                  "so refunds, payroll and purchases can be approved."])
+    missing = [k.replace("_", " ") for k in ("phone", "text_number", "hours", "on_duty_manager")
+               if not (files.get("business") or {}).get(k)]
+    if missing:
+        tips.append(["contacts", "Add your business " + ", ".join(missing) + " (agent/config.toml, [business]) so the "
+                                 "assistant can hand people to a real person instead of saying they're missing."])
+    tips.append(["assistant", "Ask the assistant on Home for what's open, who's short or which tickets are oldest. "
+                              "Staff can ask it for a person, and it goes to Customer service."])
+    tips.append(["hiwr", "The HiWR button next to the logo opens quick actions: Scan reads codes and text, Mesh "
+                         "organizes your staff, and Settings is last. Import, Recall and Add are on the way."])
+    if not log:
+        tips.append(["confirm", "Every change goes through a confirm card: Confirm, Fix or Cancel. Nothing changes "
+                                "on one tap, and each one is kept in Confirmations."])
+    tips.append(["signin", "Authenticator sign-in is on its way. Until then, the name picker is for this PC only."])
+    return [{"id": i, "text": txt} for i, txt in tips]
+
+
+@app.get("/api/settings")
+def settings(x_member: str = Header(None)):
+    """Read-only view for the account holder: who sees what (sensitivity), every confirm-card outcome and
+    check-in, and the authenticator history. Nothing here changes a setting."""
+    with LOCK:
+        m = member(x_member)
+        need(m, 4, "The business profile")
+        d = db()
+        team = roster(d)
+        counts = {i: sum(1 for x in team if x["level"] == i) for i in range(5)}
+        files = _file_levels()
+        log = [dict(r) for r in d.execute("SELECT at, actor, kind, title, outcome, detail FROM confirm_log ORDER BY id DESC LIMIT 200")]
+        checkins = [{"at": r["at"] if "at" in r.keys() else None, "subject": r["subject"], "by": r["checked_by"],
+                     "works": bool(r["works"]), "intended": bool(r["intended_consequence"]), "note": r["note"]}
+                    for r in d.execute("SELECT * FROM result_checkins ORDER BY rowid DESC LIMIT 200")]
+        return {
+            "business": {"owner": m["name"], "data": seed.DEMOS[STATE["demo"]]["name"] if STATE.get("demo")
+                         else "Test restaurant (sample)" if STATE["sample"] else "Your account",
+                         "people": len(team)},
+            "sensitivity": {
+                "levels": [{"level": i, "name": LEVEL_NAMES[i], "sees": LEVEL_SEES[i], "people": counts[i]} for i in range(5)],
+                "files": files["files"],
+                "assistant": "Runs on this computer only (local model). Nothing leaves the PC from the app."
+                             if files["mode"] == "local" else f"Assistant mode in config: {files['mode']}. "
+                             "The web app still runs it locally only.",
+                "money": "Refunds, fees, payroll and purchases always need two certified approvers.",
+            },
+            "suggestions": _suggestions(d, team, files, log),
+            "confirmations": log,
+            "checkins": checkins,
+            # Sign-in events come from the ID intake and authenticator work; until then this stays empty.
+            "authenticator": {"status": "not_set_up",
+                              "note": "Sign-in is still the name picker. Authenticator sign-in is being built.",
+                              "events": []},
+        }
+
+
+# ---------------- Assistant (the agent, on the local model) ----------------
+# The web app runs the assistant on Ollama on this computer only: no cloud backend is built here, so a
+# "/cloud" prefix or a hybrid config can't send anything out. The agent's own tools keep the access,
+# privacy and approval rules; it never approves, pays or sends.
+
+def _agent_cfg():
+    import sys
+    root = Path(__file__).resolve().parents[2]
+    if str(root) not in sys.path:
+        sys.path.insert(0, str(root))
+    from agent import config as agent_config
+    cfg = agent_config.load(os.environ.get("HUMAN_AGENT_CONFIG"), {"mode": "local"})
+    folder = Path(cfg["data"]["folder"])
+    if not folder.is_absolute():
+        cfg["data"]["folder"] = str(root / folder)
+    return cfg
+
+
+def _new_agent(m):
+    """Called with LOCK held. Tests swap this for a scripted fake model."""
+    from agent.runner import Agent
+    from agent.backends import OllamaBackend
+    cfg = _agent_cfg()
+    return Agent(db(), cfg, m["id"], backends={"local": OllamaBackend(cfg)}, clock=lambda: now_iso(),
+                 db_path=None if STATE["sample"] else DB_PATH, lock=LOCK)
+
+
+class Ask(BaseModel):
+    text: str
+
+
+@app.get("/api/assistant")
+def assistant_history(x_member: str = Header(None)):
+    with LOCK:
+        m = member(x_member)
+        chat = CHATS.get(m["id"])
+    model = None
+    try:
+        model = _agent_cfg()["local"]["model"]
+    except Exception:  # noqa: BLE001 - a bad config shows up on the first question instead
+        pass
+    hist = chat["agent"].history if chat else []
+    return {"model": model, "busy": bool(chat and chat["busy"]),
+            "messages": [x for u, r in hist for x in ({"role": "user", "text": u}, {"role": "assistant", "text": r})]}
+
+
+@app.post("/api/assistant")
+def assistant_ask(a: Ask, x_member: str = Header(None)):
+    from agent.backends import BackendUnavailable
+    text = a.text.strip()
+    if not text:
+        raise HTTPException(400, "Type a question first")
+    if len(text) > 4000:
+        raise HTTPException(400, "That's too long for one question (4000 characters at most)")
+    if text.lower().startswith("/cloud"):
+        raise HTTPException(400, "This app only uses the local model on this computer")
+    with LOCK:
+        m = member(x_member)
+        with CHATS_LOCK:
+            chat = CHATS.get(m["id"])
+            if chat and chat["busy"]:
+                raise HTTPException(409, "Still answering your last question")
+            if chat is None:
+                chat = CHATS[m["id"]] = {"agent": _new_agent(m), "busy": False}
+            chat["busy"] = True
+    try:
+        reply = chat["agent"].ask(text)          # LOCK is taken only around database work, not model time
+    except BackendUnavailable as e:
+        raise HTTPException(503, f"Couldn't reach the local model: {e}")
+    finally:
+        chat["busy"] = False
+    if not reply.strip():
+        chat["agent"].history.pop()               # don't keep a blank turn in the conversation
+        raise HTTPException(502, "The local model gave an empty answer. Ask again.")
+    return {"role": "assistant", "text": reply, "backend": chat["agent"].last_route["backend"]}
+
+
+@app.post("/api/assistant/clear")
+def assistant_clear(x_member: str = Header(None)):
+    with LOCK:
+        m = member(x_member)
+        with CHATS_LOCK:
+            chat = CHATS.get(m["id"])
+            if chat and chat["busy"]:
+                raise HTTPException(409, "Still answering your last question")
+            CHATS.pop(m["id"], None)
+    return {"ok": True}
 
 
 # ---------------- the built web app ----------------

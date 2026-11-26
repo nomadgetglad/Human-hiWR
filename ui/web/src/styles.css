@@ -78,7 +78,7 @@ button { font: inherit; }
 .note-money, .note-86, .note-staff { border-left-color: var(--bad); }
 .note-prep, .note-hr, .note-ticket { border-left-color: var(--warn); }
 .note-task { border-left-color: var(--ok); }
-.listbox { padding: 6px; outline: none; }
+.listbox { padding: 6px; outline: none; max-height: min(50vh, 420px); overflow-y: auto; overscroll-behavior: contain; }
 .option { min-height: 52px; display: flex; align-items: center; padding: 0 14px; border-radius: 8px; cursor: pointer; outline: none; }
 .option[data-focused], .option[data-hovered] { background: var(--panel); }
 .option[data-selected] { color: var(--accent); font-weight: 700; }
@@ -192,6 +192,7 @@ button { font: inherit; }
 @media (max-width: 820px) {
   .topbar { gap: 10px; }
   .brand { order: 1; }
+  .hiwr { order: 1; }
   .bell { order: 2; margin-left: auto; }
   .session { order: 3; flex-basis: 100%; }
   .session .who { flex: 1; }
@@ -202,3 +203,59 @@ button { font: inherit; }
 /* Team roster: the table scrolls inside its panel on phones instead of widening the page */
 .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .main { min-width: 0; }            /* lets a wide table scroll instead of stretching the grid column */
+
+/* Assistant chat */
+.chat-log { display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px; }
+.chat-msg { max-width: 80ch; padding: 12px 16px; border-radius: var(--radius); border: 1px solid var(--line); white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.45; }
+.chat-user { align-self: flex-end; background: var(--panel-2); }
+.chat-assistant { align-self: flex-start; background: var(--panel); }
+.chat-who { display: block; font-size: 0.8rem; color: var(--muted); font-weight: 700; margin-bottom: 4px; }
+.chat-form { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+.chat-form .field { flex: 1 1 320px; }
+.chat-form textarea { min-height: 88px; border-radius: 12px; border: 2px solid var(--line); background: var(--bg); color: var(--text); padding: 10px 14px; font: inherit; font-size: 1.05rem; resize: vertical; }
+.chat-try { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+
+/* ---------- business profile ---------- */
+.h3 { font-size: 1.05rem; margin: 18px 0 8px; }
+.settings-list { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.badge-confirmed { border-color: var(--ok, #3fb950); }
+.badge-refused { border-color: var(--bad); }
+.badge-cancelled { opacity: 0.8; }
+.brand { cursor: pointer; }
+.brand-text { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.1; }
+.brand-sub { font-size: 0.72rem; font-weight: 600; color: var(--muted); }
+.note-current { border-left-color: var(--accent); }
+.switch-sub { margin: 10px 6px 4px; }
+.tile .muted.small { font-weight: 400; text-align: left; }
+.assistant-home .chat-log { max-height: 40vh; overflow-y: auto; }
+
+/* ---------- HiWR button: half circle of quick actions ---------- */
+.hiwr { position: relative; }
+.hiwr-btn { min-height: 48px; padding: 0 16px; border-radius: 999px; border: 2px solid var(--accent); background: transparent; color: var(--accent); font-weight: 800; letter-spacing: 0.02em; cursor: pointer; }
+.hiwr-btn.hiwr-on, .hiwr-btn[data-hovered] { background: var(--accent); color: var(--accent-ink); }
+.hiwr-scrim { position: fixed; inset: 0; z-index: 40; }
+.hiwr-fan { position: absolute; left: 50%; top: calc(100% + 40px); width: 0; height: 0; z-index: 41; }
+.hiwr-opt { position: absolute; left: -32px; top: -32px; width: 64px; height: 64px; border-radius: 50%; border: 2px solid var(--line); background: var(--panel-2); color: var(--text); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-size: 1.2rem; cursor: pointer; box-shadow: 0 8px 24px #0008; animation: hiwr-pop 160ms ease-out both; }
+.hiwr-opt[data-hovered], .hiwr-opt[data-focus-visible] { border-color: var(--accent); }
+.hiwr-label { font-size: 0.7rem; font-weight: 700; }
+.hiwr-note { position: absolute; top: 150px; left: 50%; transform: translateX(-50%); white-space: nowrap; background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 6px 12px; font-size: 0.85rem; }
+@keyframes hiwr-pop { from { opacity: 0; scale: 0.4; } to { opacity: 1; scale: 1; } }
+.tips li { padding: 8px 12px; border-left: 4px solid var(--accent); background: var(--panel); border-radius: 8px; }
+
+/* ---------- Scan ---------- */
+.scan-card { max-height: 92vh; overflow-y: auto; }
+.scan-photo { display: block; max-width: 100%; max-height: 200px; object-fit: contain; margin: 12px auto; border-radius: 10px; }
+.scan-live video { width: 100%; max-height: 50vh; border-radius: 12px; background: #000; margin: 8px 0; }
+.scan-text { white-space: pre-wrap; word-break: break-word; font-size: 1rem; margin: 8px 0; max-height: 30vh; overflow: auto; }
+.scan-result { margin-top: 10px; }
+.scan-foot { margin-top: 14px; justify-content: flex-end; }
+.scan .row-gap { flex-wrap: wrap; }
+
+/* ---------- Guided tour ---------- */
+.tour { position: fixed; inset: 0; z-index: 60; }
+.tour-dim { position: fixed; inset: 0; background: #000b; }
+.tour-spot { position: fixed; border-radius: 14px; box-shadow: 0 0 0 9999px #000b; outline: 3px solid var(--accent); transition: all 200ms ease; pointer-events: none; }
+.tour-card { position: fixed; background: var(--panel); border: 2px solid var(--accent); border-radius: 16px; padding: 16px 18px; box-shadow: 0 20px 60px #000c; }
+.tour-card .h2 { margin: 2px 0 8px; }
+.tour-actions { justify-content: flex-end; margin-top: 12px; flex-wrap: wrap; }
+.nav-tour { margin-top: auto; opacity: 0.85; }

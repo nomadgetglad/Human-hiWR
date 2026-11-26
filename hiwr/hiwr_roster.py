@@ -16,6 +16,11 @@ from hiwr_contacts import _is_owner
 ADD_LEVEL = 2                 # Manager and up add people
 PAY_LEVEL = 3                 # Finance and up set pay (payroll data)
 LANGUAGES = ("en", "es")
+# Job roles a manager or the account holder picks from when adding someone. The app offers only these
+# (plus titles already on the roster), so staff can't type in their own job.
+JOB_ROLES = ("Bartender", "Busser", "Cashier", "Chef", "Cook", "Dishwasher", "Driver", "Expo", "Fryer",
+             "Grill cook", "Host", "Kitchen manager", "Lead cook", "Line cook", "Manager", "Prep cook",
+             "Server", "Shift lead", "Sous chef")
 MIN_HOURLY_CENTS = 213        # federal tipped minimum; untipped staff need 725 or more
 MAX_HOURLY_CENTS = 20000
 FIRST_NAME = re.compile(r"^[^\W\d_]+(?:['’-][^\W\d_]+)*$")
@@ -97,6 +102,12 @@ def add_member(db, first_name, title, added_by, language="en", lvl=0, role=None,
         db.execute("INSERT INTO staff(member, role, hourly_cents, min_call_in_hours) VALUES (?,?,?,?)",
                    (v["id"], v["role"], v["hourly_cents"], v["min_call_in_hours"]))
     return v["id"]
+
+
+def job_roles(db):
+    """The job roles to pick from: the standard list plus any title already on the roster."""
+    have = {r[0] for r in db.execute("SELECT DISTINCT title FROM members") if r[0] and r[0] != "Owner"}
+    return sorted(set(JOB_ROLES) | have, key=str.lower)
 
 
 def is_active(db, member):

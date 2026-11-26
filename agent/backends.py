@@ -32,12 +32,19 @@ class OllamaBackend:
         try:
             with urllib.request.urlopen(req, timeout=self.timeout) as r:
                 return json.loads(r.read())
+        except urllib.error.HTTPError as e:     # Ollama is up but failed (e.g. the GPU didn't load); say what it said
+            try:
+                detail = json.loads(e.read()).get("error") or e.reason
+            except ValueError:
+                detail = e.reason
+            raise BackendUnavailable(f"Ollama returned an error ({e.code}: {detail}). Asking again usually works.")
         except (urllib.error.URLError, TimeoutError, ConnectionError) as e:
             raise BackendUnavailable(f"Ollama isn't answering at {self.host} ({e}). Is it running? Try `ollama serve`.")
 
     def turn(self, system, history, user_text, tools, execute):
         msgs = [{"role": "system", "content": system}, *history, {"role": "user", "content": user_text}]
         spec = [{"type": "function", "function": t} for t in tools]
+        nudged = False
         for _ in range(MAX_TOOL_ROUNDS):
             r = self._post(f"{self.host}/api/chat", {"model": self.model, "messages": msgs, "tools": spec, "stream": False,
                                                      "options": {"num_ctx": self.num_ctx}})
@@ -47,7 +54,13 @@ class OllamaBackend:
             calls = m.get("tool_calls") or []
             msgs.append({k: v for k, v in m.items() if k in ("role", "content", "tool_calls")})
             if not calls:
-                return m.get("content", "").strip()
+                text = (m.get("content") or "").strip()
+                if text or nudged:
+                    return text
+                # gpt-oss sometimes stops after thinking, with no answer. Ask once for the answer itself.
+                nudged = True
+                msgs.append({"role": "user", "content": "Write your answer to my question now."})
+                continue
             for c in calls:
                 fn = c.get("function", {})
                 args = fn.get("arguments") or {}

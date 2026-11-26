@@ -310,6 +310,23 @@ def test_ollama_backend_sets_num_ctx_and_runs_tools():
     assert sent[0]["options"]["num_ctx"] >= 16384 and sent[1]["messages"][-1]["role"] == "tool"
 
 
+def test_ollama_blank_answer_gets_one_nudge():
+    """gpt-oss can stop after thinking with no answer: ask once, then give up with what came back."""
+    cfg = config_mod.load("/nonexistent")
+    answers = iter(["", "Nobody is short tonight."])
+    sent = []
+
+    def post(url, payload):
+        sent.append(json.loads(json.dumps(payload)))
+        return {"message": {"role": "assistant", "content": next(answers), "thinking": "..."}}
+
+    assert OllamaBackend(cfg, post=post).turn("sys", [], "short?", [], None) == "Nobody is short tonight."
+    assert sent[1]["messages"][-1] == {"role": "user", "content": "Write your answer to my question now."}
+
+    always_blank = OllamaBackend(cfg, post=lambda u, p: {"message": {"role": "assistant", "content": ""}})
+    assert always_blank.turn("sys", [], "short?", [], None) == ""      # the web app turns this into "ask again"
+
+
 def test_claude_backend_request_shape():
     from types import SimpleNamespace as NS
     cfg = config_mod.load("/nonexistent")

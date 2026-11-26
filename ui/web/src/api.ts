@@ -31,7 +31,7 @@ export const usd = (cents: number) =>
   (cents / 100).toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: cents >= 100000 ? 0 : 2 });
 
 export type Member = { id: string; name: string; title: string; language: "en" | "es" };
-export type Me = Member & { level: number; level_name: string; menu: { id: string; label: string }[]; today: string; clock: number };
+export type Me = Member & { level: number; level_name: string; menu: { id: string; label: string; children?: string[] }[]; today: string; clock: number; sample?: boolean; demo?: string | null };
 export type Proposal = {
   id: number;
   kind: string;

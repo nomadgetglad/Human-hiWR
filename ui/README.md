@@ -41,6 +41,7 @@ Handy links (sample restaurant): `?as=fry_rosa&screen=prep&lang=es`, `?as=owner_
 | Customer service | Order note check: "no tomato" finds tomato hidden in sub-recipes. |
 | Accounting | Money actions waiting for double approval. Approve/Reject only shows for certified approvers who did not request it. |
 | My tasks | The day's tasks the owner assigned, marked done with a confirm card. |
+| Assistant | Chat with the operations assistant (`../agent/`) on the local model only (Ollama on this computer; `agent/config.toml` sets the model). The web app builds no cloud backend, so `/cloud` and a hybrid config can't send anything out. It answers as the signed-in person, with that person's level, and has no tool that approves, pays or sends. One conversation per person, kept in memory until "New conversation" or a reset. The app keeps working while the model thinks: the database lock is held only for each tool call. Ollama has to be running (`ollama serve`). |
 
 ## The confirm card
 
