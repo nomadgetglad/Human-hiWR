@@ -26,6 +26,7 @@ Handy links: `?as=fry_rosa&screen=prep&lang=es`, `?as=owner_alex`, `?as=manager_
 | Part | What it shows |
 | --- | --- |
 | Top bar | One key number set per level, plus the notifications bell. Account holder: revenue today and tonight's forecast. Managers: kitchen labor % and who is on shift (Finance level also sees labor dollars; level 2 sees % and hours only). Employees: their tasks. Notifications are filtered the same way. |
+| Team | First in the menu for managers, and the first card on Home: who works here, and Add staff. Managers add people at level 0 (first name, job title, language). Only the account holder gives a level above 0; only Finance level and up put someone on the schedule with a pay rate, and only they see pay. Every add is a confirm card, logged, never edited or deleted. Sign-in reads this roster. |
 | Main menu | Staff, Inventory (Warehouse, Stew, Lab), My station, Customer service, Accounting (Finance level and up only), My tasks (employees). |
 | Staff | Chef/manager view: needed vs on shift per role, call-outs, find same-night cover and text the top 3, HR requests. Staff level sees only their own shift and requests. |
 | My station | The fryer's prep screen: what to fry now, sold today vs forecast, good on hand, next hour, rest of night, tortillas left. A sample clock moves the night forward. |

@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 
 from server import app as appmod
 from server import seed
-from hiwr_access import set_level
+from hiwr_roster import add_member
 
 
 @pytest.fixture
@@ -72,9 +72,8 @@ def test_employee_task_count_matches_their_list(c):
     assert "Pull list for aisle A and D before 7 AM" not in titles     # Tim's task, not Rosa's
 
 
-def test_lead_level_sees_tasks_staff_and_tickets_but_no_money(c, monkeypatch):
-    monkeypatch.setattr(seed, "MEMBERS", seed.MEMBERS + [{"id": "lead_ana", "name": "Ana", "title": "Lead", "level": 1, "language": "en"}])
-    set_level(appmod.db(), "lead_ana", 1, seed.OWNER)
+def test_lead_level_sees_tasks_staff_and_tickets_but_no_money(c):
+    add_member(appmod.db(), "Ana", "Lead", seed.OWNER, lvl=1, member_id="lead_ana")
     b = bar(c, "lead_ana")
     assert b["role_view"] == "employee" and labels(b) == ["My tasks"]
     assert "money" not in kinds(b) and "hr" not in kinds(b)
@@ -175,11 +174,10 @@ def test_same_approver_twice_via_two_open_cards(c):
     assert c.get("/api/accounting/money-actions", headers=H("manager_jo")).json()[0]["status"].endswith("(1/2)")
 
 
-def test_no_decision_after_approved(c, monkeypatch):
+def test_no_decision_after_approved(c):
     """Bug found: a third certified approver could reject after APPROVED."""
     from hiwr_contacts import certify
-    monkeypatch.setattr(seed, "MEMBERS", seed.MEMBERS + [{"id": "finance_kim", "name": "Kim", "title": "Finance", "level": 3, "language": "en"}])
-    set_level(appmod.db(), "finance_kim", 3, seed.OWNER)
+    add_member(appmod.db(), "Kim", "Finance", seed.OWNER, lvl=3, member_id="finance_kim")
     certify(appmod.db(), "finance_kim", "refund", seed.OWNER)
     decide(c, "manager_jo", 1); decide(c, "accounting_sue", 1)
     assert card(c, "finance_kim", "money_decide", money_action_id=1, decision="reject").status_code == 409

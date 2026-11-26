@@ -5,20 +5,17 @@ import { api, setMember, type Me, type Member } from "./api";
 import { ProposalProvider } from "./ConfirmCard";
 import { LangContext, useT, type Lang } from "./i18n";
 import { TopBar } from "./TopBar";
-import { Accounting, CustomerService, Home, Inventory, Prep, Staff, Tasks } from "./screens";
+import { Accounting, CustomerService, Home, Inventory, Prep, Staff, Tasks, Team } from "./screens";
+import { useData } from "./useData";
 import "./styles.css";
 
 function App() {
-  const [members, setMembers] = useState<Member[]>([]);
   const [who, setWho] = useState(() => new URLSearchParams(location.search).get("as") ?? "chef_marco");
   const [me, setMe] = useState<Me | null>(null);
   const [lang, setLang] = useState<Lang>("en");
   const [screen, setScreen] = useState(() => new URLSearchParams(location.search).get("screen") ?? "home");
   const [toast, setToast] = useState("");
 
-  useEffect(() => {
-    api<Member[]>("/api/members").then(setMembers);
-  }, []);
   useEffect(() => {
     setMember(who);
     api<Me>("/api/me").then((m) => {
@@ -45,11 +42,12 @@ function App() {
           <TopBar
             me={me}
             go={go}
-            right={<SessionControls members={members} who={who} setWho={(w) => { setWho(w); setScreen("home"); }} lang={lang} setLang={setLang} me={me} />}
+            right={<SessionControls who={who} setWho={(w) => { setWho(w); setScreen("home"); }} lang={lang} setLang={setLang} me={me} />}
           />
           <Nav me={me} screen={view} go={go} />
           <main className="main" id="main">
             {view === "home" && <Home me={me} go={go} />}
+            {view === "team" && <Team />}
             {view === "staff" && <Staff />}
             {view === "prep" && <Prep />}
             {["inventory", "warehouse", "stew", "lab"].includes(view) && <Inventory tab={view === "inventory" ? undefined : view} />}
@@ -83,8 +81,9 @@ function Nav({ me, screen, go }: { me: Me; screen: string; go: (s: string) => vo
   );
 }
 
-function SessionControls({ members, who, setWho, lang, setLang, me }: { members: Member[]; who: string; setWho: (w: string) => void; lang: Lang; setLang: (l: Lang) => void; me: Me }) {
+function SessionControls({ who, setWho, lang, setLang, me }: { who: string; setWho: (w: string) => void; lang: Lang; setLang: (l: Lang) => void; me: Me }) {
   const t = useT();
+  const members = useData<Member[]>("/api/members") ?? []; // reloads after someone is added
   return (
     <div className="session">
       <Select className="who" selectedKey={who} onSelectionChange={(k) => setWho(String(k))} aria-label={t("Signed in as")}>

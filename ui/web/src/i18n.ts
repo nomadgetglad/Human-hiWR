@@ -74,6 +74,27 @@ const es: Record<string, string> = {
   "Forecast tonight": "Pronóstico esta noche",
   "Kitchen labor tonight": "Mano de obra cocina hoy",
   "Labor cost tonight": "Costo de mano de obra hoy",
+  Team: "Equipo",
+  "Your team": "Tu equipo",
+  "people on the roster": "personas en la lista",
+  "Add staff": "Agregar personal",
+  "First name": "Nombre",
+  "Job title": "Puesto",
+  Level: "Nivel",
+  Lead: "Líder",
+  Manager: "Gerente",
+  Finance: "Finanzas",
+  "Account holder": "Titular de la cuenta",
+  "Schedule role": "Rol en el horario",
+  "Not on the schedule": "Fuera del horario",
+  "Pay ($/hour)": "Pago ($/hora)",
+  Pay: "Pago",
+  Add: "Agregar",
+  Roster: "Lista del personal",
+  Name: "Nombre",
+  "First name only. They start at level 0 (Staff); only the account holder raises a level.":
+    "Solo el nombre. Empiezan en nivel 0 (Personal); solo el titular de la cuenta sube el nivel.",
+  "The team roster needs Manager level.": "La lista del equipo requiere nivel Gerente.",
 };
 
 export type Lang = "en" | "es";

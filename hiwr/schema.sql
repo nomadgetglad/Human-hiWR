@@ -1120,3 +1120,28 @@ CREATE TRIGGER IF NOT EXISTS approver_keys_no_update BEFORE UPDATE ON approver_k
 CREATE TRIGGER IF NOT EXISTS approver_keys_no_delete BEFORE DELETE ON approver_keys BEGIN SELECT RAISE(ABORT, 'approver_keys is append-only'); END;
 CREATE TRIGGER IF NOT EXISTS signed_decisions_no_update BEFORE UPDATE ON signed_decisions BEGIN SELECT RAISE(ABORT, 'signed_decisions is append-only'); END;
 CREATE TRIGGER IF NOT EXISTS signed_decisions_no_delete BEFORE DELETE ON signed_decisions BEGIN SELECT RAISE(ABORT, 'signed_decisions is append-only'); END;
+
+-- ===================================================================
+-- Roster: who works here and can sign in. Adding staff is where an account starts.
+-- First names only (no last names). Rows are never edited or deleted: a change is a new event.
+-- ===================================================================
+CREATE TABLE IF NOT EXISTS members (
+    id          TEXT PRIMARY KEY,                -- e.g. cook_maria
+    first_name  TEXT NOT NULL,
+    title       TEXT NOT NULL,                   -- what the team calls the job: Cook, fryer
+    language    TEXT NOT NULL DEFAULT 'en',      -- en or es: the screen language they open in
+    added_by    TEXT NOT NULL,
+    added_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS member_status_events (
+    id          INTEGER PRIMARY KEY,
+    member      TEXT NOT NULL REFERENCES members(id),
+    status      TEXT NOT NULL CHECK (status IN ('active', 'inactive')),
+    actor       TEXT NOT NULL,
+    reason      TEXT,
+    at          TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TRIGGER IF NOT EXISTS members_no_update BEFORE UPDATE ON members BEGIN SELECT RAISE(ABORT, 'members is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS members_no_delete BEFORE DELETE ON members BEGIN SELECT RAISE(ABORT, 'members is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS member_status_events_no_update BEFORE UPDATE ON member_status_events BEGIN SELECT RAISE(ABORT, 'member_status_events is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS member_status_events_no_delete BEFORE DELETE ON member_status_events BEGIN SELECT RAISE(ABORT, 'member_status_events is append-only'); END;

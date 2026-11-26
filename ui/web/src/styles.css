@@ -198,3 +198,7 @@ button { font: inherit; }
   .select-who { width: 100%; min-width: 0; }
   .stats { order: 4; flex-basis: 100%; }
 }
+
+/* Team roster: the table scrolls inside its panel on phones instead of widening the page */
+.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.main { min-width: 0; }            /* lets a wide table scroll instead of stretching the grid column */

@@ -29,6 +29,7 @@ from hiwr_staff import staff_section, decide_hr, find_same_night, send_offers
 from hiwr_prep import prep_plan, make_batches
 from hiwr_stew import portions_left, cost_card, check_order_note
 from hiwr_warehouse import pull_list, record_pull
+from hiwr_roster import add_member, check_new_member, get_member, roster
 
 app = FastAPI(title="Human (HiWR) sample UI")
 LOCK = threading.Lock()
@@ -58,7 +59,7 @@ def now_iso(minute=0):
 
 
 def member(x_member):
-    m = next((m for m in seed.MEMBERS if m["id"] == x_member), None)
+    m = get_member(db(), x_member) if x_member else None    # active people on the roster only
     if not m:
         raise HTTPException(401, "Pick who is signed in")
     return {**m, "level": level(db(), m["id"]), "level_name": LEVEL_NAMES[level(db(), m["id"])]}
@@ -73,14 +74,16 @@ def need(m, lvl, what):
 
 @app.get("/api/members")
 def members():
-    return [{k: m[k] for k in ("id", "name", "title", "language")} for m in seed.MEMBERS]
+    with LOCK:
+        return [{k: m[k] for k in ("id", "name", "title", "language")} for m in roster(db())]
 
 
 @app.get("/api/me")
 def me(x_member: str = Header(None)):
     with LOCK:
         m = member(x_member)
-        menu = [
+        menu = [{"id": "team", "label": "Team"}] if m["level"] >= 2 else []   # adding people is where it starts
+        menu += [
             {"id": "staff", "label": "Staff"},
             {"id": "inventory", "label": "Inventory", "children": ["warehouse", "stew", "lab"]},
             {"id": "prep", "label": "My station"},
@@ -213,6 +216,20 @@ def tasks(x_member: str = Header(None)):
     with LOCK:
         m = member(x_member)
         return my_day(db(), m["id"], seed.TODAY)
+
+
+# ---------------- Team (roster) ----------------
+
+@app.get("/api/team")
+def team(x_member: str = Header(None)):
+    """Who works here. Managers and up see the roster; pay only at Finance level and up."""
+    with LOCK:
+        m = member(x_member)
+        need(m, 2, "The team roster")
+        d = db()
+        roles = sorted({r[0] for r in d.execute("SELECT role FROM staffing_rules UNION SELECT role FROM staff")})
+        return {"members": roster(d, show_pay=m["level"] >= 3), "can_set_level": m["level"] >= 4,
+                "can_set_pay": m["level"] >= 3, "roles": roles}
 
 
 # ---------------- Staff ----------------
@@ -348,9 +365,37 @@ class Propose(BaseModel):
     params: dict
 
 
+def _new_member(m, params):
+    try:
+        return check_new_member(db(), params.get("first_name"), params.get("title"), m["id"], params.get("language", "en"),
+                                params.get("level") or 0, params.get("role"), params.get("hourly_cents"),
+                                params.get("min_call_in_hours") or 0)
+    except PermissionError as e:
+        raise HTTPException(403, str(e))
+    except (TypeError, ValueError) as e:
+        raise HTTPException(400, str(e))
+
+
 def _card(m, kind, params):
     """Validate a proposed change and describe it. Nothing is written here."""
     d = db()
+    if kind == "add_member":
+        v = _new_member(m, params)
+        lines = [f"Adds {v['first_name']} as {v['title']}, level {v['level']} {LEVEL_NAMES[v['level']]}",
+                 f"Signs in as {v['id']} and opens in {'Spanish' if v['language'] == 'es' else 'English'}",
+                 "Sees: " + {0: "own schedule, own tasks, ticket status", 1: "team schedule, inventory counts, roll call",
+                             2: "client records, order costs, vendor prices, purchase drafts",
+                             3: "payroll, money actions, ticket financial blocks"}[v["level"]]]
+        if v["role"]:
+            lines.append(f"On the schedule as {v['role']} at ${v['hourly_cents'] / 100:.2f}/h")
+        lines.append("Logged under your name; never edited or deleted")
+        fix = [{"field": "first_name", "label": "First name", "type": "text"},
+               {"field": "title", "label": "Job title", "type": "text"}]
+        if m["level"] >= 4:
+            fix.append({"field": "level", "label": "Level (0-3)", "type": "number", "min": 0, "max": 3})
+        if m["level"] >= 3:
+            fix.append({"field": "hourly_cents", "label": "Rate (cents per hour)", "type": "number", "min": 213, "max": 20000})
+        return {"title": f"Add {v['first_name']} to the team", "lines": lines, "fix": fix}
     if kind == "fry":
         n = int(params.get("batches", 0))
         if not 1 <= n <= 10:
@@ -439,6 +484,11 @@ def _card(m, kind, params):
 
 def _apply(m, kind, params):
     d = db()
+    if kind == "add_member":
+        v = _new_member(m, params)
+        mid = add_member(d, v["first_name"], v["title"], m["id"], v["language"], v["level"], v["role"],
+                         v["hourly_cents"], v["min_call_in_hours"])
+        return f"{v['first_name']} added. They sign in as {mid}"
     if kind == "fry":
         make_batches(d, PREP_ITEM, int(params["batches"]), now_iso(2), m["id"])
         return f"Fried {params['batches']} batch(es) at {STATE['clock']}:02"
