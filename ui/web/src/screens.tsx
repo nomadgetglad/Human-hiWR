@@ -4,6 +4,7 @@ import { api, usd, type Me } from "./api";
 import { useProposals } from "./ConfirmCard";
 import { useT } from "./i18n";
 import { useData } from "./useData";
+import { IdIntake, IdView } from "./IdCard";
 
 const TILE_ICON: Record<string, string> = { team: "🧑‍🤝‍🧑", staff: "👥", inventory: "📦", prep: "🔥", cs: "💬", accounting: "📒", tasks: "☐" };
 
@@ -49,7 +50,8 @@ const LEVELS = ["Staff", "Lead", "Manager", "Finance"];
 export function Team() {
   const t = useT();
   const { propose } = useProposals();
-  const v = useData<{ members: any[]; can_set_level: boolean; can_set_pay: boolean; roles: string[] }>("/api/team");
+  const v = useData<{ members: any[]; can_set_level: boolean; can_set_pay: boolean; can_view_id: boolean; roles: string[]; doc_types: Record<string, string> }>("/api/team");
+  const [idFor, setIdFor] = useState<{ id: string; name: string; view: boolean } | null>(null);
   const [first, setFirst] = useState("");
   const [title, setTitle] = useState("");
   const [language, setLanguage] = useState("en");
@@ -106,6 +108,12 @@ export function Team() {
           </Button>
         </div>
       </div>
+      {idFor &&
+        (idFor.view ? (
+          <IdView key={idFor.id} member={idFor.id} name={idFor.name} onClose={() => setIdFor(null)} />
+        ) : (
+          <IdIntake key={idFor.id} member={idFor.id} name={idFor.name} docTypes={v.doc_types} onClose={() => setIdFor(null)} />
+        ))}
       <div className="panel">
         <h2 className="h2">
           {t("Roster")} <span className="muted">· {v.members.length}</span>
@@ -120,6 +128,8 @@ export function Team() {
                 <th>{t("Language")}</th>
                 <th>{t("Schedule role")}</th>
                 {v.can_set_pay && <th>{t("Pay")}</th>}
+                <th>{t("Sign-in")}</th>
+                <th>{t("ID")}</th>
               </tr>
             </thead>
             <tbody>
@@ -138,6 +148,38 @@ export function Team() {
                   <td>{m.language.toUpperCase()}</td>
                   <td className="cap">{m.role ?? "—"}</td>
                   {v.can_set_pay && <td>{m.hourly_cents ? `${usd(m.hourly_cents)}/h` : "—"}</td>}
+                  <td>
+                    <span className={`badge ${m.sign_in.enrolled ? "badge-ok" : ""}`}>
+                      {m.sign_in.enrolled ? t("Authenticator") : m.sign_in.setup_code_open ? t("Code given") : t("Not set up")}
+                    </span>
+                    {m.sign_in.last_sign_in && <div className="muted small">{m.sign_in.last_sign_in.replace("T", " ").slice(0, 16)}</div>}
+                    {m.can_issue_code && (
+                      <Button className="btn btn-ghost btn-sm" onPress={() => propose("setup_code", { member_id: m.id })}>
+                        {m.sign_in.enrolled ? t("Reset") : t("Setup code")}
+                      </Button>
+                    )}
+                  </td>
+                  <td>
+                    {m.id_card.on_file ? (
+                      <span className={`badge ${m.id_card.expiring ? "badge-warn" : "badge-ok"}`}>
+                        {t(m.id_card.doc_label)}
+                        {m.id_card.expires_on ? ` · ${m.id_card.expires_on}` : ""}
+                      </span>
+                    ) : (
+                      <span className="badge">{t("Not on file")}</span>
+                    )}
+                    {m.id_card.on_file && !m.id_card.work_auth_verified && <div className="muted small">{t("Work authorization not checked")}</div>}
+                    {v.can_view_id && m.id_card.on_file && (
+                      <Button className="btn btn-ghost btn-sm" onPress={() => setIdFor({ id: m.id, name: m.name, view: true })}>
+                        {t("Open")}
+                      </Button>
+                    )}
+                    {m.can_enter_id && (
+                      <Button className="btn btn-ghost btn-sm" onPress={() => setIdFor({ id: m.id, name: m.name, view: false })}>
+                        {m.id_card.on_file ? t("Update") : t("Add ID")}
+                      </Button>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>

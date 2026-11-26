@@ -11,15 +11,18 @@ Rules this layer keeps:
 - After a confirmed change the member is asked for the authority check-in: did it work, and did it
   have the intended consequence.
 
-Sign-in is a sample switcher (X-Member header). Real sign-in comes later.
+Sign-in: your own account needs a real sign-in (an authenticator app, see hiwr_auth.py). The session is an
+HttpOnly cookie, and every POST must carry the X-Human header so another site can't post with that cookie.
+The test restaurant (sample data) keeps the X-Member switcher so demos and tests can jump between people.
 """
+import contextvars
 import itertools
 import os
 import threading
 from pathlib import Path
 
-from fastapi import FastAPI, Header, HTTPException
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, Header, HTTPException, Response
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -31,6 +34,9 @@ from hiwr_prep import prep_plan, make_batches
 from hiwr_stew import portions_left, cost_card, check_order_note
 from hiwr_warehouse import pull_list, record_pull
 from hiwr_roster import add_member, check_new_member, get_member, roster
+import hiwr_auth as auth
+import hiwr_idintake as idin
+from hiwr_vault import Vault
 
 app = FastAPI(title="Human (HiWR) sample UI")
 LOCK = threading.Lock()
@@ -38,6 +44,38 @@ STATE = {}
 PROPOSALS = {}
 _ids = itertools.count(1)
 PREP_ITEM = "fried tortilla chips"
+PENDING_ENROLL = {}      # (member, setup code id) -> secret shown on the phone, until the first 6-digit code matches
+COOKIE = "human_session"
+REQ = contextvars.ContextVar("req", default={})
+
+
+class RequestInfo:
+    """Plain ASGI middleware: keeps the session cookie, device and address for this request, and blocks
+    cross-site POSTs (a POST must carry the X-Human header, which another site can't add)."""
+    def __init__(self, inner):
+        self.inner = inner
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.inner(scope, receive, send)
+        h = {k.decode().lower(): v.decode() for k, v in scope.get("headers", [])}
+        cookies = {}
+        for part in h.get("cookie", "").split(";"):
+            k, _, v = part.strip().partition("=")
+            if k:
+                cookies[k] = v
+        bearer = h.get("authorization", "")
+        token = bearer[7:] if bearer.lower().startswith("bearer ") else cookies.get(COOKIE)
+        info = {"token": token, "device": auth.device_label(h.get("user-agent")),
+                "ip": (scope.get("client") or ("", 0))[0], "https": scope.get("scheme") == "https"}
+        if (scope["method"] == "POST" and scope["path"].startswith("/api/") and STATE.get("auth")
+                and h.get("x-human") != "1"):
+            return await JSONResponse({"detail": "Missing X-Human header"}, 403)(scope, receive, send)
+        tok = REQ.set(info)
+        try:
+            await self.inner(scope, receive, send)
+        finally:
+            REQ.reset(tok)
 
 
 # Your own data (no test data) is kept in this file; the test restaurant lives in memory only
@@ -52,9 +90,29 @@ def reset(sample=True):
             STATE["db"].close()
         STATE.clear()
         PROPOSALS.clear()
+        PENDING_ENROLL.clear()
         STATE["db"] = seed.build() if sample else seed.build_blank(DB_PATH)
         STATE["sample"] = sample
         STATE["clock"] = 16          # prep clock hour, sample
+        STATE["auth"] = not sample          # your own account always needs a real sign-in
+        STATE["vault"] = (Vault.ephemeral() if sample or DB_PATH == ":memory:"
+                          else Vault.from_file(str(Path(DB_PATH).with_suffix(".key"))))
+        if not sample:
+            _first_owner_code()
+
+
+def _first_owner_code():
+    """A new account: the account holder has no authenticator yet, so a setup code is printed in the server
+    window. Only someone at the server computer sees it. A new one is printed on every start until it's used."""
+    d = STATE["db"]
+    if auth.factor(d, seed.OWNER):
+        return
+    code = auth.issue_setup_code(d, "console", seed.OWNER)
+    d.commit()
+    STATE["owner_code"] = code          # kept for tests on an in-memory account; never sent to a browser
+    print(f"\n  Human: first sign-in for the account holder ({seed.OWNER})\n"
+          f"  Setup code: {code[:4]}-{code[4:]}  (good for {auth.SETUP_CODE_HOURS} hours)\n"
+          f"  Open the app on your phone, pick your name, choose 'First time', and type this code.\n", flush=True)
 
 
 # Starts empty (no test data) unless HUMAN_DATA=sample is set before starting the server
@@ -70,9 +128,14 @@ def now_iso(minute=0):
 
 
 def member(x_member):
-    m = get_member(db(), x_member) if x_member else None    # active people on the roster only
+    """Who is asking. A session cookie (authenticator sign-in) always works. The X-Member switcher only
+    works on the test restaurant."""
+    mid = auth.session_member(db(), REQ.get().get("token"))
+    if not mid and not STATE["auth"]:
+        mid = x_member
+    m = get_member(db(), mid) if mid else None    # active people on the roster only
     if not m:
-        raise HTTPException(401, "Pick who is signed in")
+        raise HTTPException(401, "Sign in first" if STATE["auth"] else "Pick who is signed in")
     return {**m, "level": level(db(), m["id"]), "level_name": LEVEL_NAMES[level(db(), m["id"])]}
 
 
@@ -104,7 +167,7 @@ def me(x_member: str = Header(None)):
             menu.append({"id": "accounting", "label": "Accounting"})
         open_cards = sum(1 for p in PROPOSALS.values() if p["actor"] == m["id"] and p["state"] == "open")
         return {**m, "menu": menu, "today": seed.TODAY, "clock": STATE["clock"], "open_cards": open_cards,
-                "sample": STATE["sample"]}
+                "sample": STATE["sample"], "auth_required": STATE["auth"]}
 
 
 @app.post("/api/demo/reset")
@@ -133,6 +196,121 @@ def demo_clock(c: Clock, x_member: str = Header(None)):
         if STATE["sample"]:            # sample POS sales only exist in the test restaurant
             seed.add_today_sales(db(), c.hour)
         return {"clock": c.hour}
+
+
+# ---------------- Sign-in (authenticator app) ----------------
+
+class SetupStart(BaseModel):
+    member_id: str
+    setup_code: str
+
+
+class SetupFinish(SetupStart):
+    code: str
+
+
+class SignIn(BaseModel):
+    member_id: str
+    code: str
+
+
+def _req():
+    r = REQ.get()
+    return {"device": r.get("device"), "ip": r.get("ip")}
+
+
+def _on_roster(mid):
+    if not get_member(db(), mid):
+        raise HTTPException(401, "That code doesn't work")
+
+
+def _set_cookie(resp, token, exp):
+    resp.set_cookie(COOKIE, token, max_age=auth.SESSION_HOURS * 3600, httponly=True, samesite="strict",
+                    secure=REQ.get().get("https", False), path="/")
+
+
+@app.get("/api/auth/status")
+def auth_status():
+    with LOCK:
+        mid = auth.session_member(db(), REQ.get().get("token"))
+        return {"auth_required": STATE["auth"], "signed_in": mid, "sample": STATE["sample"]}
+
+
+@app.post("/api/auth/setup/start")
+def auth_setup_start(s: SetupStart):
+    """First time on a phone: check the setup code, then hand back a fresh secret to scan.
+    Nothing is linked until the first 6-digit code from the app matches."""
+    with LOCK:
+        _on_roster(s.member_id)
+        try:
+            r = auth.check_setup_code(db(), s.member_id, s.setup_code, **_req())
+        except PermissionError as e:
+            raise HTTPException(403, str(e))
+        secret = auth.new_secret()
+        PENDING_ENROLL[(s.member_id, r["id"])] = secret
+        uri = auth.otpauth_uri(secret, s.member_id)
+        out = {"secret": secret, "otpauth": uri, "member_id": s.member_id}
+        try:
+            import segno
+            out["qr_svg"] = segno.make(uri, error="m").svg_inline(scale=5, dark="#000", light="#fff")
+        except ImportError:
+            out["qr_svg"] = None          # pip install segno for the QR; the key can be typed in by hand
+        return out
+
+
+@app.post("/api/auth/setup/finish")
+def auth_setup_finish(s: SetupFinish, response: Response):
+    with LOCK:
+        _on_roster(s.member_id)
+        d = db()
+        try:
+            r = auth.check_setup_code(d, s.member_id, s.setup_code, **_req())
+            secret = PENDING_ENROLL.get((s.member_id, r["id"]))
+            if not secret:
+                raise PermissionError("Start again: type your setup code to get a new QR code")
+            fid = auth.enroll(d, STATE["vault"], s.member_id, s.setup_code, secret, s.code, **_req())
+        except PermissionError as e:
+            raise HTTPException(403, str(e))
+        PENDING_ENROLL.pop((s.member_id, r["id"]), None)
+        token, exp = auth.start_session_after_enroll(d, s.member_id, fid, **_req())
+        d.commit()
+        _set_cookie(response, token, exp)
+        return {"ok": True, "member_id": s.member_id, "expires_at": exp}
+
+
+@app.post("/api/auth/signin")
+def auth_signin(s: SignIn, response: Response):
+    with LOCK:
+        _on_roster(s.member_id)
+        d = db()
+        try:
+            token, exp = auth.sign_in(d, STATE["vault"], s.member_id, s.code, **_req())
+        except PermissionError as e:
+            raise HTTPException(403, str(e))
+        d.commit()
+        _set_cookie(response, token, exp)
+        return {"ok": True, "member_id": s.member_id, "expires_at": exp}
+
+
+@app.post("/api/auth/signout")
+def auth_signout(response: Response):
+    with LOCK:
+        auth.sign_out(db(), REQ.get().get("token"), **_req())
+        db().commit()
+        response.delete_cookie(COOKIE, path="/")
+        return {"ok": True}
+
+
+@app.get("/api/auth/history")
+def auth_history(member_id: str | None = None, x_member: str = Header(None)):
+    """Enrollment and sign-in history (method, device, time). Your own always; someone else's if you could
+    issue them a setup code (a level above theirs, or the account holder). For the settings page."""
+    with LOCK:
+        m = member(x_member)
+        target = member_id or m["id"]
+        if target != m["id"] and not auth.can_issue(db(), m["id"], target):
+            raise HTTPException(403, "You can see your own sign-in history, and people below your level")
+        return {"member_id": target, **auth.status(db(), target), "events": auth.history(db(), target)}
 
 
 # ---------------- Top bar: notifications + one key number that depends on the level ----------------
@@ -214,6 +392,9 @@ def topbar(x_member: str = Header(None)):
             n = d.execute("SELECT COUNT(*) FROM hr_requests h WHERE NOT EXISTS (SELECT 1 FROM hr_request_events e WHERE e.request_id=h.id)").fetchone()[0]
             if n:
                 notes.append({"kind": "hr", "text": f"{n} HR request{'s' if n > 1 else ''} waiting", "go": "staff"})
+            for x in idin.expiring(d):
+                notes.append({"kind": "id", "text": f"{x['member']}: ID {'expired' if x['days'] < 0 else 'expires in ' + str(x['days']) + ' days'}",
+                              "go": "team"})
             for r in portions_left(d):
                 if r["portions"] < 30:
                     notes.append({"kind": "86", "text": f"{r['dish']}: {r['portions']} portions left (limited by {r['limited_by']})", "go": "stew"})
@@ -249,8 +430,45 @@ def team(x_member: str = Header(None)):
         d = db()
         roles = sorted({r[0] for r in d.execute("SELECT role FROM staffing_rules UNION SELECT role FROM staff")}
                        | {"cook", "dishwasher", "server", "host", "bartender", "prep"})
-        return {"members": roster(d, show_pay=m["level"] >= 3), "can_set_level": m["level"] >= 4,
-                "can_set_pay": m["level"] >= 3, "roles": roles}
+        rows = roster(d, show_pay=m["level"] >= 3)
+        for r in rows:
+            st = auth.status(d, r["id"])
+            r["sign_in"] = {k: st[k] for k in ("enrolled", "last_sign_in", "setup_code_open")}
+            r["can_issue_code"] = auth.can_issue(d, m["id"], r["id"])
+            r["id_card"] = idin.id_status(d, r["id"])
+            r["can_enter_id"] = idin.can_enter(d, m["id"], r["id"])
+        return {"members": rows, "can_set_level": m["level"] >= 4,
+                "can_set_pay": m["level"] >= 3, "can_view_id": idin.can_view(d, m["id"]), "roles": roles,
+                "doc_types": idin.DOC_TYPES}
+
+
+@app.get("/api/team/{member_id}/id")
+def team_id(member_id: str, x_member: str = Header(None)):
+    """ID details: Finance and the account holder only. Every opening is logged."""
+    with LOCK:
+        m = member(x_member)
+        try:
+            out = idin.view_details(db(), STATE["vault"], m["id"], member_id)
+        except PermissionError as e:
+            raise HTTPException(403, str(e))
+        except LookupError as e:
+            raise HTTPException(404, str(e))
+        db().commit()
+        return {**out, "access_log": idin.access_log(db(), member_id)}
+
+
+@app.get("/api/team/{member_id}/id/photo")
+def team_id_photo(member_id: str, x_member: str = Header(None)):
+    with LOCK:
+        m = member(x_member)
+        try:
+            data, mime = idin.view_photo(db(), STATE["vault"], m["id"], member_id)
+        except PermissionError as e:
+            raise HTTPException(403, str(e))
+        except LookupError as e:
+            raise HTTPException(404, str(e))
+        db().commit()
+        return Response(data, media_type=mime, headers={"Cache-Control": "no-store"})
 
 
 # ---------------- Staff ----------------
@@ -403,9 +621,47 @@ def _new_member(m, params):
         raise HTTPException(400, str(e))
 
 
+SENSITIVE_KINDS = {"id_intake"}       # their params never go back to the browser and are dropped after use
+
+
 def _card(m, kind, params):
     """Validate a proposed change and describe it. Nothing is written here."""
     d = db()
+    if kind == "setup_code":
+        target = str(params.get("member_id") or "")
+        try:
+            auth.check_issue(d, m["id"], target)
+        except LookupError as e:
+            raise HTTPException(404, str(e))
+        except PermissionError as e:
+            raise HTTPException(403, str(e))
+        enrolled = auth.factor(d, target) is not None
+        lines = [f"Makes a one-time setup code for {target}, good for {auth.SETUP_CODE_HOURS} hours",
+                 "They type it on their phone and link an authenticator app (Google or Microsoft Authenticator)",
+                 "The code shows once, to you. Give it to them in person"]
+        if enrolled:
+            lines.append("They already have an authenticator: using this code replaces it and signs out their open sessions")
+        return {"title": f"{'Reset sign-in' if enrolled else 'Set up sign-in'} for {target}", "lines": lines, "fix": []}
+    if kind == "id_intake":
+        target = str(params.get("member_id") or "")
+        try:
+            v, photo = idin.check_intake(d, m["id"], target, params.get("fields"), params.get("photo"))
+        except LookupError as e:
+            raise HTTPException(404, str(e))
+        except PermissionError as e:
+            raise HTTPException(403, str(e))
+        except (TypeError, ValueError) as e:
+            raise HTTPException(400, str(e))
+        prev = idin.id_status(d, target)
+        lines = [f"{idin.DOC_TYPES[v['doc_type']]} {idin.mask(v['doc_number'])}, issued by {v['issuer']}"
+                 + (f", expires {v['expires_on']}" if v["expires_on"] else ""),
+                 "Legal name, birth date, address and emergency contact are sealed (encrypted) on this computer",
+                 "Photo of the ID attached, sealed too" if photo else "No photo attached",
+                 "Work authorization checked in person" if v["work_auth_verified"] else "Work authorization NOT checked yet",
+                 "Managers see only: on file, kind, expiry. Finance and the account holder open the details, and each opening is logged"]
+        if prev["on_file"]:
+            lines.append(f"Adds version {prev['versions'] + 1}; the earlier version is kept, not overwritten")
+        return {"title": f"Put ID on file for {target}", "lines": lines, "fix": []}
     if kind == "add_member":
         v = _new_member(m, params)
         lines = [f"Adds {v['first_name']} as {v['title']}, level {v['level']} {LEVEL_NAMES[v['level']]}",
@@ -511,6 +767,12 @@ def _card(m, kind, params):
 
 def _apply(m, kind, params):
     d = db()
+    if kind == "setup_code":
+        code = auth.issue_setup_code(d, m["id"], params["member_id"])
+        return f"Setup code for {params['member_id']}: {code[:4]}-{code[4:]} (shows once, good for {auth.SETUP_CODE_HOURS} h)"
+    if kind == "id_intake":
+        idin.record_intake(d, STATE["vault"], m["id"], params["member_id"], params.get("fields"), params.get("photo"))
+        return f"ID on file for {params['member_id']}"
     if kind == "add_member":
         v = _new_member(m, params)
         mid = add_member(d, v["first_name"], v["title"], m["id"], v["language"], v["level"], v["role"],
@@ -546,7 +808,22 @@ def propose(p: Propose, x_member: str = Header(None)):
         card = _card(m, p.kind, p.params)
         pid = next(_ids)
         PROPOSALS[pid] = {"id": pid, "kind": p.kind, "params": p.params, "actor": m["id"], "state": "open", **card}
-        return PROPOSALS[pid]
+        return _public(PROPOSALS[pid])
+
+
+def _public(p):
+    """What goes back to the browser. ID details are not echoed, and a setup code shows only once."""
+    out = dict(p)
+    if p["kind"] in SENSITIVE_KINDS:
+        out["params"] = {"member_id": p["params"].get("member_id")}
+    return out
+
+
+def _forget(p):
+    if p["kind"] in SENSITIVE_KINDS:
+        p["params"] = {"member_id": p["params"].get("member_id")}
+    if p["kind"] == "setup_code" and p.get("result"):
+        p["result"] = "Setup code issued (shown once)"
 
 
 @app.post("/api/proposals/{pid}/confirm")
@@ -567,7 +844,9 @@ def confirm(pid: int, x_member: str = Header(None)):
             raise HTTPException(400, str(e))
         db().commit()
         p.update(state="confirmed", result=result)
-        return p
+        out = _public(p)
+        _forget(p)
+        return out
 
 
 @app.post("/api/proposals/{pid}/cancel")
@@ -577,6 +856,7 @@ def cancel(pid: int, x_member: str = Header(None)):
         p = PROPOSALS.get(pid)
         if p and p["actor"] == m["id"] and p["state"] == "open":
             p["state"] = "cancelled"
+            _forget(p)
         return {"ok": True}
 
 
@@ -597,6 +877,9 @@ def checkin(pid: int, c: CheckIn, x_member: str = Header(None)):
         db().commit()
         p["checkin"] = status
         return {"status": status}
+
+
+app.add_middleware(RequestInfo)
 
 
 # ---------------- the built web app ----------------

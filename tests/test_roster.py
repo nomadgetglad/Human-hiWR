@@ -152,16 +152,30 @@ def test_bad_level_type_is_400_not_500(c):
 
 # ---------- a new account starts empty (no test data) ----------
 
+def sign_in_first_time(c, member, setup_code):
+    """What a person does on their phone: setup code, scan, type the first 6-digit code."""
+    from hiwr_auth import totp, _step
+    from datetime import datetime, timezone
+    r = c.post("/api/auth/setup/start", json={"member_id": member, "setup_code": setup_code})
+    assert r.status_code == 200, r.text
+    code = totp(r.json()["secret"], _step(datetime.now(timezone.utc)))
+    r = c.post("/api/auth/setup/finish", json={"member_id": member, "setup_code": setup_code, "code": code})
+    assert r.status_code == 200, r.text
+
+
 @pytest.fixture
 def blank():
     appmod.reset(sample=False)
-    yield TestClient(appmod.app, raise_server_exceptions=False)
+    c = TestClient(appmod.app, raise_server_exceptions=False, headers={"X-Human": "1"})
+    sign_in_first_time(c, "owner_alex", appmod.STATE["owner_code"])
+    yield c
     appmod.reset()
 
 
 def test_blank_account_is_just_the_owner(blank):
     assert [m["id"] for m in blank.get("/api/members").json()] == ["owner_alex"]
-    assert blank.get("/api/me", headers=H("chef_marco")).status_code == 401
+    stranger = TestClient(appmod.app, raise_server_exceptions=False)
+    assert stranger.get("/api/me", headers=H("owner_alex")).status_code == 401     # no switcher on your own account
     me = blank.get("/api/me", headers=H("owner_alex")).json()
     assert me["level"] == 4 and me["sample"] is False and me["menu"][0]["id"] == "team"
 
@@ -182,7 +196,11 @@ def test_blank_has_no_sample_numbers(blank):
 
 def test_first_step_on_a_blank_account_is_adding_staff(blank):
     assert add(blank, "owner_alex", first_name="Maria", title="Cook", role="cook", hourly_cents=1600).status_code == 200
-    assert blank.get("/api/me", headers=H("cook_maria")).json()["name"] == "Maria"
+    r = blank.post("/api/proposals", json={"kind": "setup_code", "params": {"member_id": "cook_maria"}})
+    code = blank.post(f"/api/proposals/{r.json()['id']}/confirm", json={}).json()["result"].split(": ")[1][:9]
+    phone = TestClient(appmod.app, raise_server_exceptions=False, headers={"X-Human": "1"})
+    sign_in_first_time(phone, "cook_maria", code)
+    assert phone.get("/api/me").json()["name"] == "Maria"
     assert "dishwasher" in blank.get("/api/team", headers=H("owner_alex")).json()["roles"]
 
 
@@ -196,7 +214,8 @@ def test_owner_switches_between_blank_and_sample(blank):
 def test_your_team_survives_a_restart(tmp_path, monkeypatch):
     monkeypatch.setattr(appmod, "DB_PATH", str(tmp_path / "human.db"))
     appmod.reset(sample=False)
-    c = TestClient(appmod.app, raise_server_exceptions=False)
+    c = TestClient(appmod.app, raise_server_exceptions=False, headers={"X-Human": "1"})
+    sign_in_first_time(c, "owner_alex", appmod.STATE["owner_code"])
     assert add(c, "owner_alex", first_name="Maria", title="Cook").status_code == 200
     appmod.reset(sample=True)            # switch to the test restaurant and back: nothing of yours is lost
     appmod.reset(sample=False)
