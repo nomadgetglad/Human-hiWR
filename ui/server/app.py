@@ -144,10 +144,11 @@ def reset(sample=True, demo=None):
         STATE["sample"] = sample
         STATE["demo"] = demo
         STATE["clock"] = 16          # prep clock hour, sample
-        STATE["auth"] = not sample          # your own account always needs a real sign-in
+        # Your own account needs a real sign-in, unless HUMAN_AUTH=off (this PC only: keep the server on 127.0.0.1)
+        STATE["auth"] = not sample and os.environ.get("HUMAN_AUTH", "on").lower() != "off"
         STATE["vault"] = (Vault.ephemeral() if sample or DB_PATH == ":memory:"
                           else Vault.from_file(str(Path(DB_PATH).with_suffix(".key"))))
-        if not sample:
+        if STATE["auth"]:
             _first_owner_code()
 
 

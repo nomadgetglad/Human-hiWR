@@ -382,3 +382,16 @@ def test_import_needs_manager_and_matching_lines(c):
     assert c.post("/api/proposals", json={"kind": "import_sales", "params": {"rows": rows}}, headers=H("fry_rosa")).status_code == 403
     r = c.post("/api/proposals", json={"kind": "import_sales", "params": {"rows": [{"item": "nope", "qty": 1}]}}, headers=H("chef_marco"))
     assert r.status_code == 400
+
+
+def test_sign_in_can_be_switched_off_for_this_pc(tmp_path, monkeypatch):
+    monkeypatch.setattr(appmod, "DB_PATH", str(tmp_path / "human.db"))
+    monkeypatch.setenv("HUMAN_AUTH", "off")
+    appmod.reset(sample=False)
+    try:
+        c = TestClient(appmod.app, raise_server_exceptions=False)
+        assert c.get("/api/auth/status").json()["auth_required"] is False
+        assert c.get("/api/me", headers=H("owner_alex")).json()["level"] == 4
+    finally:
+        monkeypatch.delenv("HUMAN_AUTH")
+        appmod.reset()
