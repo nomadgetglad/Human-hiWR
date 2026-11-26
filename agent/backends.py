@@ -1,3 +1,4 @@
+import os
 """The two model backends. Both run the same tool loop; the runner hands them a tool executor that has
 already been wrapped with the access and privacy rules.
 
@@ -25,6 +26,9 @@ class OllamaBackend:
     def __init__(self, cfg, post=None):
         c = cfg["local"]
         self.model, self.host, self.num_ctx, self.timeout = c["model"], c["host"].rstrip("/"), c["num_ctx"], c["timeout_seconds"]
+        # num_gpu = 0 runs the model on the CPU: slower, but works when the graphics card driver is failing
+        ng = c.get("num_gpu", os.environ.get("HUMAN_NUM_GPU", ""))
+        self.options = {"num_ctx": self.num_ctx, **({"num_gpu": int(ng)} if str(ng).strip() != "" else {})}
         self._post = post or self._http_post
 
     def _http_post(self, url, payload):
@@ -47,7 +51,7 @@ class OllamaBackend:
         nudged = False
         for _ in range(MAX_TOOL_ROUNDS):
             r = self._post(f"{self.host}/api/chat", {"model": self.model, "messages": msgs, "tools": spec, "stream": False,
-                                                     "options": {"num_ctx": self.num_ctx}})
+                                                     "options": self.options})
             if "error" in r:
                 raise BackendUnavailable(f"Ollama error: {r['error']}")
             m = r.get("message", {})
