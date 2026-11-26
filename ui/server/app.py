@@ -1785,6 +1785,9 @@ def assistant_ask(a: Ask, x_member: str = Header(None)):
         reply = chat["agent"].ask(text)          # LOCK is taken only around database work, not model time
     except BackendUnavailable as e:
         raise HTTPException(503, f"Couldn't reach the local model: {e}")
+    except sqlite3.ProgrammingError:
+        # the business was switched while the model was thinking; that conversation belonged to the old data
+        raise HTTPException(409, "The business was switched while I was answering. Ask again.")
     finally:
         chat["busy"] = False
     if not reply.strip():
