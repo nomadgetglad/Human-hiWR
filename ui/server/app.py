@@ -40,6 +40,7 @@ import hiwr_auth as auth
 import hiwr_notices as notices_mod
 import hiwr_taxdocs as taxdocs
 import hiwr_portfolio as pf
+import hiwr_recall as recall
 import hiwr_idintake as idin
 from hiwr_vault import Vault
 
@@ -875,6 +876,20 @@ def tech_fee(hours: float, x_member: str = Header(None)):
     if not 0 < hours <= 24:
         raise HTTPException(400, "Hours must be between 0 and 24")
     return pf.tech_fee(hours)
+
+
+# ---------------- Recall (HiWR -> Recall): recurring numbers and averages ----------------
+
+@app.get("/api/recall")
+def recall_view(q: str = "", x_member: str = Header(None)):
+    """Facts computed straight from the data, searchable. Staff see only facts about themselves."""
+    with LOCK:
+        m = member(x_member)
+        d = db()
+        inv = seed.PRIOR_INVOICES if STATE["sample"] and STATE.get("demo") in (None, "stew") else ()
+        allf = recall.facts(d, m["id"], m["level"], seed.TODAY, name_of=lambda x: _first_name(d, x), prior_invoices=inv)
+        hits = recall.search(allf, q[:100])
+        return {"facts": hits[:60], "total": len(allf), "query": q}
 
 
 # ---------------- Team chat (HiWR -> Mesh) ----------------

@@ -6,6 +6,7 @@ import { api, usd, type Me } from "./api";
 import { useT } from "./i18n";
 import { ScanDialog } from "./Scan";
 import { ImportDialog } from "./Import";
+import { RecallDialog } from "./Recall";
 import { useData } from "./useData";
 
 type Stat = { label: string; value: number; format: "usd" | "pct" | "int"; detail: string };
@@ -152,6 +153,7 @@ function HiwrButton({ me, go }: { me: Me; go: (s: string) => void }) {
   const [picked, setPicked] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [recalling, setRecalling] = useState(false);
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
@@ -181,6 +183,9 @@ function HiwrButton({ me, go }: { me: Me; go: (s: string) => void }) {
                     if (a.id === "scan") {
                       setOpen(false);
                       setScanning(true);
+                    } else if (a.id === "recall") {
+                      setOpen(false);
+                      setRecalling(true);
                     } else if (a.id === "import" && me.level >= 2) {
                       setOpen(false);
                       setImporting(true);
@@ -211,6 +216,7 @@ function HiwrButton({ me, go }: { me: Me; go: (s: string) => void }) {
       )}
       <ScanDialog isOpen={scanning} onClose={() => setScanning(false)} />
       <ImportDialog isOpen={importing} onClose={() => setImporting(false)} />
+      <RecallDialog isOpen={recalling} onClose={() => setRecalling(false)} />
     </div>
   );
 }

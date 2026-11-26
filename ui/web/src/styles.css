@@ -321,3 +321,11 @@ button { font: inherit; }
 .appt { border-top: 1px solid var(--line); padding: 10px 0; }
 .ledger { list-style: none; margin: 4px 0 8px; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; color: var(--muted); }
 .slots .btn { margin-bottom: 6px; }
+
+/* ---------- Recall ---------- */
+.recall-card { width: min(640px, 100%); }
+.recall-list { display: flex; flex-direction: column; gap: 8px; max-height: 55vh; overflow-y: auto; margin-top: 10px; }
+.recall-fact { display: flex; gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+.recall-icon { width: 24px; text-align: center; }
+.recall-value { font-weight: 800; color: var(--hiwr-c, var(--accent)); white-space: nowrap; margin-left: 10px; }
+.recall-try { flex-wrap: wrap; margin-top: 6px; }
