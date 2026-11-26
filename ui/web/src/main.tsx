@@ -1,34 +1,52 @@
 import { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { Button, ListBox, ListBoxItem, Popover, Select, SelectValue, Label, ToggleButton, ToggleButtonGroup } from "react-aria-components";
-import { api, setMember, type Me, type Member } from "./api";
+import { api, setMember, type AuthStatus, type Me, type Member } from "./api";
 import { ProposalProvider } from "./ConfirmCard";
 import { LangContext, useT, type Lang } from "./i18n";
+import { SignIn } from "./SignIn";
 import { TopBar } from "./TopBar";
-import { Accounting, CustomerService, Home, Inventory, Prep, Staff, Tasks } from "./screens";
+import { Accounting, CustomerService, Home, Inventory, Prep, Staff, Tasks, Team } from "./screens";
+import { useData } from "./useData";
 import "./styles.css";
 
 const INV_TABS = ["warehouse", "stew", "lab"];
-const PAGE_ICON: Record<string, string> = { home: "🏠", staff: "👥", inventory: "📦", prep: "🔥", cs: "💬", accounting: "📒", tasks: "☐" };
+const PAGE_ICON: Record<string, string> = { home: "🏠", team: "🪪", staff: "👥", inventory: "📦", prep: "🔥", cs: "💬", accounting: "📒", tasks: "☐" };
 
 function App() {
-  const [members, setMembers] = useState<Member[]>([]);
   const [who, setWho] = useState(() => new URLSearchParams(location.search).get("as") ?? "chef_marco");
   const [me, setMe] = useState<Me | null>(null);
   const [lang, setLang] = useState<Lang>("en");
   const [screen, setScreen] = useState(() => new URLSearchParams(location.search).get("screen") ?? "home");
   const [toast, setToast] = useState("");
+  const [authState, setAuthState] = useState<AuthStatus | null>(null);
+  const [signedIn, setSignedIn] = useState(0); // bumps after a sign-in or sign-out
 
   useEffect(() => {
-    api<Member[]>("/api/members").then(setMembers);
-  }, []);
+    api<AuthStatus>("/api/auth/status").then(setAuthState).catch(() => setAuthState({ auth_required: false, signed_in: null, sample: true }));
+  }, [signedIn]);
+
   useEffect(() => {
+    if (!authState) return;
+    if (authState.auth_required) {
+      // your own account: who you are comes from your sign-in, not a switcher
+      setMember("");
+      if (!authState.signed_in) return setMe(null);
+      api<Me>("/api/me").then((m) => {
+        setMe(m);
+        setLang(m.language);
+      });
+      return;
+    }
     setMember(who);
-    api<Me>("/api/me").then((m) => {
-      setMe(m);
-      setLang((new URLSearchParams(location.search).get("lang") as Lang) ?? m.language);
-    });
-  }, [who]);
+    api<Me>("/api/me")
+      .then((m) => {
+        setMe(m);
+        setLang((new URLSearchParams(location.search).get("lang") as Lang) ?? m.language);
+      })
+      // not on this roster (e.g. a new, empty account): sign in as the first person on it
+      .catch(() => api<Member[]>("/api/members").then((ms) => ms.length && ms[0].id !== who && setWho(ms[0].id)));
+  }, [who, authState]);
   useEffect(() => {
     if (toast) {
       const id = setTimeout(() => setToast(""), 5000);
@@ -36,7 +54,18 @@ function App() {
     }
   }, [toast]);
 
+  if (authState?.auth_required && !authState.signed_in)
+    return (
+      <LangContext.Provider value={lang}>
+        <SignIn onDone={() => setSignedIn((n) => n + 1)} />
+      </LangContext.Provider>
+    );
   if (!me) return null;
+  const signOut = async () => {
+    await api("/api/auth/signout", {});
+    setScreen("home");
+    setSignedIn((n) => n + 1);
+  };
   // One full-screen page per section, in menu order. Swipe left/right (or tap the bottom bar) to move between them.
   const pages = [{ id: "home", label: "Home" }, ...me.menu, ...(me.level < 2 && !me.menu.some((m) => m.id === "tasks") ? [{ id: "tasks", label: "My tasks" }] : [])];
   const pageOf = (s: string) => (INV_TABS.includes(s) ? "inventory" : s);
@@ -49,6 +78,8 @@ function App() {
     switch (id) {
       case "home":
         return <Home me={me} go={go} />;
+      case "team":
+        return <Team />;
       case "staff":
         return <Staff />;
       case "prep":
@@ -72,7 +103,16 @@ function App() {
           <TopBar
             me={me}
             go={go}
-            right={<SessionControls members={members} who={who} setWho={(w) => { setWho(w); setScreen("home"); }} lang={lang} setLang={setLang} me={me} />}
+            right={
+              <SessionControls
+                who={who}
+                setWho={(w) => { setWho(w); setScreen("home"); }}
+                lang={lang}
+                setLang={setLang}
+                me={me}
+                signOut={authState?.auth_required ? signOut : undefined}
+              />
+            }
           />
           <Pager count={pages.length} index={index} onIndex={(i) => i !== index && setScreen(pages[i].id)}>
             {pages.map((p, i) => (
@@ -149,7 +189,7 @@ function Pager({ count, index, onIndex, children }: { count: number; index: numb
 function Nav({ pages, current, go }: { pages: { id: string; label: string }[]; current: string; go: (s: string) => void }) {
   const t = useT();
   return (
-    <nav className="nav" aria-label="Main menu">
+    <nav className={`nav ${pages.length > 6 ? "nav-compact" : ""}`} aria-label="Main menu">
       {pages.map((m) => (
         <Button key={m.id} className={`nav-item ${current === m.id ? "nav-on" : ""}`} onPress={() => go(m.id)} aria-current={current === m.id ? "page" : undefined}>
           <span className="nav-icon" aria-hidden>
@@ -162,10 +202,22 @@ function Nav({ pages, current, go }: { pages: { id: string; label: string }[]; c
   );
 }
 
-function SessionControls({ members, who, setWho, lang, setLang, me }: { members: Member[]; who: string; setWho: (w: string) => void; lang: Lang; setLang: (l: Lang) => void; me: Me }) {
+function SessionControls({ who, setWho, lang, setLang, me, signOut }: { who: string; setWho: (w: string) => void; lang: Lang; setLang: (l: Lang) => void; me: Me; signOut?: () => void }) {
   const t = useT();
+  const members = useData<Member[]>(signOut ? null : "/api/members") ?? []; // reloads after someone is added
   return (
     <div className="session">
+      {signOut ? (
+        <div className="who who-val">
+          <b>{me.name}</b>
+          <span className="muted small">
+            {me.title} · L{me.level} {me.level_name}
+          </span>
+          <Button className="btn btn-ghost btn-sm" onPress={signOut}>
+            {t("Sign out")}
+          </Button>
+        </div>
+      ) : (
       <Select className="who" selectedKey={who} onSelectionChange={(k) => setWho(String(k))} aria-label={t("Signed in as")}>
         <Label className="sr-only">{t("Signed in as")}</Label>
         <Button className="select-btn select-who">
@@ -191,6 +243,7 @@ function SessionControls({ members, who, setWho, lang, setLang, me }: { members:
           </ListBox>
         </Popover>
       </Select>
+      )}
       <ToggleButtonGroup
         className="lang"
         aria-label={t("Language")}

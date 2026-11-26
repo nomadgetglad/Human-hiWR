@@ -14,7 +14,9 @@ export class ApiError extends Error {
 export async function api<T = any>(path: string, body?: unknown): Promise<T> {
   const r = await fetch(path, {
     method: body === undefined ? "GET" : "POST",
-    headers: { "X-Member": member, ...(body === undefined ? {} : { "Content-Type": "application/json" }) },
+    // X-Member is the sample switcher (ignored on your own account); X-Human marks the request as ours (blocks cross-site posts)
+    headers: { ...(member ? { "X-Member": member } : {}), "X-Human": "1", ...(body === undefined ? {} : { "Content-Type": "application/json" }) },
+    credentials: "same-origin",
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   if (!r.ok) {
@@ -31,7 +33,16 @@ export const usd = (cents: number) =>
   (cents / 100).toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: cents >= 100000 ? 0 : 2 });
 
 export type Member = { id: string; name: string; title: string; language: "en" | "es" };
-export type Me = Member & { level: number; level_name: string; menu: { id: string; label: string }[]; today: string; clock: number };
+export type Me = Member & {
+  level: number;
+  level_name: string;
+  menu: { id: string; label: string }[];
+  today: string;
+  clock: number;
+  sample?: boolean;
+  auth_required?: boolean;
+};
+export type AuthStatus = { auth_required: boolean; signed_in: string | null; sample: boolean };
 export type Proposal = {
   id: number;
   kind: string;
