@@ -35,6 +35,7 @@ from hiwr_stew import portions_left, cost_card, check_order_note
 from hiwr_warehouse import pull_list, record_pull
 from hiwr_roster import add_member, check_new_member, get_member, roster
 import hiwr_auth as auth
+import hiwr_roles as role_words
 import hiwr_idintake as idin
 from hiwr_vault import Vault
 
@@ -437,9 +438,30 @@ def team(x_member: str = Header(None)):
             r["can_issue_code"] = auth.can_issue(d, m["id"], r["id"])
             r["id_card"] = idin.id_status(d, r["id"])
             r["can_enter_id"] = idin.can_enter(d, m["id"], r["id"])
+        lang = m["language"]
+        house = [{"title": t, "role": r, "label": role_words.label(r, lang)}
+                 for t, r in sorted(role_words._house_titles(d).items())]
         return {"members": rows, "can_set_level": m["level"] >= 4,
                 "can_set_pay": m["level"] >= 3, "can_view_id": idin.can_view(d, m["id"]), "roles": roles,
+                "role_labels": {r: role_words.label(r, lang) for r in roles}, "house_titles": house,
+                "all_roles": [{"role": r.key, "label": role_words.label(r.key, lang)} for r in role_words.ROLES],
                 "doc_types": idin.DOC_TYPES}
+
+
+@app.get("/api/roles/match")
+def roles_match(title: str = "", x_member: str = Header(None)):
+    """What a job title means: the schedule role, how senior, duties, skills and usual certs.
+    The words only. Never pay, never a level."""
+    with LOCK:
+        m = member(x_member)
+        d = db()
+        hit = role_words.match(title[:80], d)
+        lang = m["language"]
+        hit["label"] = role_words.label(hit["role"], lang) if hit["role"] else None
+        hit["about"] = role_words.describe(hit["role"], lang) if hit["role"] else None
+        hit["suggestions"] = [{"role": r, "label": role_words.label(r, lang)} for r in hit["suggestions"]]
+        hit["also"] = [{"role": r, "label": role_words.label(r, lang)} for r in hit["also"]]
+        return hit
 
 
 @app.get("/api/team/{member_id}/id")
@@ -662,6 +684,31 @@ def _card(m, kind, params):
         if prev["on_file"]:
             lines.append(f"Adds version {prev['versions'] + 1}; the earlier version is kept, not overwritten")
         return {"title": f"Put ID on file for {target}", "lines": lines, "fix": []}
+    if kind == "house_title":
+        need(m, role_words.HOUSE_TITLE_LEVEL, "House job titles")
+        title, role = str(params.get("title") or "").strip(), str(params.get("role") or "").strip().lower()
+        retire = bool(params.get("retire"))
+        n = role_words.norm(title)
+        current = role_words._house_titles(d).get(n)
+        if retire:
+            if current is None:
+                raise HTTPException(404, f"'{title}' is not a house title")
+            return {"title": f"Stop using '{title}'", "lines": [
+                f"'{title}' will no longer read as {role_words.label(current)}",
+                "The earlier entry stays in the history"], "fix": []}
+        if not n or len(n) > 40:
+            raise HTTPException(400, "A house title is 1 to 40 characters")
+        if not role:
+            raise HTTPException(400, "Pick the schedule role this title belongs to")
+        if n in role_words.INDEX and role_words.INDEX[n][0] != role:
+            raise HTTPException(400, f"'{title}' already means {role_words.INDEX[n][0]}; pick another word")
+        lines = [f"'{title}' will read as {role_words.label(role)} ({role}) on the Team screen, in hiring and in "
+                 "staffing", "It doesn't change anyone's level, pay or what they can see",
+                 "Logged under your name; never edited or deleted"]
+        if current:
+            lines.insert(1, f"Replaces '{title}' = {role_words.label(current)}")
+        return {"title": f"Add house title '{title}'", "lines": lines,
+                "fix": [{"field": "title", "label": "House title", "type": "text"}]}
     if kind == "add_member":
         v = _new_member(m, params)
         lines = [f"Adds {v['first_name']} as {v['title']}, level {v['level']} {LEVEL_NAMES[v['level']]}",
@@ -669,6 +716,11 @@ def _card(m, kind, params):
                  "Sees: " + {0: "own schedule, own tasks, ticket status", 1: "team schedule, inventory counts, roll call",
                              2: "client records, order costs, vendor prices, purchase drafts",
                              3: "payroll, money actions, ticket financial blocks"}[v["level"]]]
+        reads = role_words.match(v["title"], d)
+        if reads["role"]:
+            extra = ", ".join(reads["seniority"] + reads["schedule"])
+            lines.append(f"Job title reads as {role_words.label(reads['role'])}{f' ({extra})' if extra else ''}. "
+                         "The title doesn't set the level")
         if v["role"]:
             lines.append(f"On the schedule as {v['role']} at ${v['hourly_cents'] / 100:.2f}/h")
         lines.append("Logged under your name; never edited or deleted")
@@ -773,6 +825,12 @@ def _apply(m, kind, params):
     if kind == "id_intake":
         idin.record_intake(d, STATE["vault"], m["id"], params["member_id"], params.get("fields"), params.get("photo"))
         return f"ID on file for {params['member_id']}"
+    if kind == "house_title":
+        if params.get("retire"):
+            role_words.retire_house_title(d, params["title"], m["id"])
+            return f"'{params['title']}' retired"
+        role_words.add_house_title(d, params["title"], params["role"], m["id"])
+        return f"'{params['title']}' now reads as {role_words.label(params['role'].strip().lower())}"
     if kind == "add_member":
         v = _new_member(m, params)
         mid = add_member(d, v["first_name"], v["title"], m["id"], v["language"], v["level"], v["role"],

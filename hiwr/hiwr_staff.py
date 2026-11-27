@@ -10,6 +10,7 @@ import json
 from datetime import datetime, timedelta
 from hiwr_contacts import request_money_action
 from hiwr_human import staff_needed
+from hiwr_roles import experience
 
 def _dt(s): return datetime.fromisoformat(s)
 def _iso(d): return d.isoformat(timespec="minutes")
@@ -93,8 +94,7 @@ def find_same_night(db, role, starts_at, ends_at, now):
     out = []
     for c in db.execute("SELECT c.* FROM candidates c JOIN candidate_availability v ON v.candidate_id=c.id "
                         "WHERE v.weekday=? AND v.start_hour<=? AND v.end_hour>=?", (wd, sh, eh)):
-        months = db.execute("SELECT COALESCE(SUM(months),0) FROM candidate_experience WHERE candidate_id=? AND role=?",
-                            (c["id"], role)).fetchone()[0]
+        months = experience(db, c["id"], role)[0]
         member = f"temp_{c['name'].split()[0].lower()}"
         paused = db.execute("SELECT 1 FROM conduct_events e JOIN work_agreements a ON a.id=e.agreement_id "
                             "WHERE a.candidate_id=? AND e.response LIKE 'agreement ended%' AND e.at > ?",
@@ -262,8 +262,7 @@ def search_certified(db, role, all_of, any_of, weekdays, start_hour, end_hour, o
             (c["id"], wd, start_hour, end_hour)).fetchone()]
         if len(days_ok) < len(weekdays):
             problems.append(f"available {len(days_ok)}/{len(weekdays)} nights")
-        months = db.execute("SELECT COALESCE(SUM(months),0) FROM candidate_experience WHERE candidate_id=? AND role=?",
-                            (c["id"], role)).fetchone()[0]
+        months = experience(db, c["id"], role)[0]
         if not months:
             continue
         row = {"name": c["name"], "months": months, "certs": {x: state(x) for x in all_of + any_of if x in certs},
