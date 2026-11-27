@@ -219,7 +219,7 @@ LEFT JOIN appointment_events e ON e.id = (
 CREATE TABLE IF NOT EXISTS approver_certifications (
     id          INTEGER PRIMARY KEY,
     member      TEXT NOT NULL,
-    scope       TEXT NOT NULL CHECK (scope IN ('refund', 'payroll', 'fee', 'subcontract')),
+    scope       TEXT NOT NULL CHECK (scope IN ('refund', 'payroll', 'fee', 'subcontract', 'contract')),
     status      TEXT NOT NULL CHECK (status IN ('granted', 'revoked')),
     granted_by  TEXT NOT NULL,
     at          TEXT NOT NULL DEFAULT (datetime('now'))
@@ -1235,3 +1235,62 @@ CREATE TRIGGER IF NOT EXISTS id_records_no_update BEFORE UPDATE ON id_records BE
 CREATE TRIGGER IF NOT EXISTS id_records_no_delete BEFORE DELETE ON id_records BEGIN SELECT RAISE(ABORT, 'id_records is append-only'); END;
 CREATE TRIGGER IF NOT EXISTS id_access_log_no_update BEFORE UPDATE ON id_access_log BEGIN SELECT RAISE(ABORT, 'id_access_log is append-only'); END;
 CREATE TRIGGER IF NOT EXISTS id_access_log_no_delete BEFORE DELETE ON id_access_log BEGIN SELECT RAISE(ABORT, 'id_access_log is append-only'); END;
+
+-- ===================================================================
+-- Business agreements (hiwr_agreements.py): templates, not legal advice. HiWR drafts, a person confirms,
+-- money terms get two certified approvers, each party's acceptance is tied to the exact version it saw.
+-- Everything here is append-only: a change is a new version, and approvals on an old version stop counting.
+-- ===================================================================
+CREATE TABLE IF NOT EXISTS agreements (
+    id          INTEGER PRIMARY KEY,
+    type        TEXT NOT NULL,                   -- key in hiwr_agreements.TYPES
+    title       TEXT NOT NULL,
+    drafted_by  TEXT NOT NULL,                   -- a member, or 'hiwr' when HiWR proposed it
+    source      TEXT NOT NULL CHECK (source IN ('staff', 'hiwr')),
+    created_at  TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS agreement_versions (
+    id            INTEGER PRIMARY KEY,
+    agreement_id  INTEGER NOT NULL REFERENCES agreements(id),
+    version       INTEGER NOT NULL,
+    fields        TEXT NOT NULL,                 -- JSON of the form's answers
+    hash          TEXT NOT NULL,                 -- sha256 of type + fields; every sign-off names it
+    made_by       TEXT NOT NULL,
+    reason        TEXT,
+    at            TEXT NOT NULL,
+    UNIQUE (agreement_id, version)
+);
+CREATE TABLE IF NOT EXISTS agreement_events (
+    id            INTEGER PRIMARY KEY,
+    agreement_id  INTEGER NOT NULL REFERENCES agreements(id),
+    version       INTEGER NOT NULL,
+    hash          TEXT NOT NULL,
+    event         TEXT NOT NULL CHECK (event IN ('confirmed', 'fix_requested', 'cancelled', 'money_approve',
+                                                 'money_reject', 'accepted', 'ended', 'checkin')),
+    actor         TEXT NOT NULL,                 -- who did it in HiWR (for 'accepted': who recorded it)
+    party_role    TEXT,                          -- 'accepted': which party (vendor, client, worker, business)
+    method        TEXT,                          -- 'accepted': in_person_signature, e_signature, email_reply, ...
+    note          TEXT,
+    at            TEXT NOT NULL
+);
+-- one money decision per person per version
+CREATE UNIQUE INDEX IF NOT EXISTS agreement_money_once ON agreement_events(agreement_id, version, actor)
+    WHERE event IN ('money_approve', 'money_reject');
+CREATE TABLE IF NOT EXISTS agreement_links (     -- invoices, POs, tickets, shipments, appointments, money actions
+    id            INTEGER PRIMARY KEY,
+    agreement_id  INTEGER NOT NULL REFERENCES agreements(id),
+    kind          TEXT NOT NULL CHECK (kind IN ('invoice', 'po', 'ticket', 'shipment', 'appointment',
+                                                'money_action', 'job')),
+    ref           TEXT NOT NULL,
+    linked_by     TEXT NOT NULL,
+    at            TEXT NOT NULL,
+    UNIQUE (agreement_id, kind, ref)
+);
+CREATE TRIGGER IF NOT EXISTS agreements_no_update BEFORE UPDATE ON agreements BEGIN SELECT RAISE(ABORT, 'agreements is append-only: add a new version'); END;
+CREATE TRIGGER IF NOT EXISTS agreements_no_delete BEFORE DELETE ON agreements BEGIN SELECT RAISE(ABORT, 'agreements is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS agreement_versions_no_update BEFORE UPDATE ON agreement_versions BEGIN SELECT RAISE(ABORT, 'agreement_versions is append-only: add a new version'); END;
+CREATE TRIGGER IF NOT EXISTS agreement_versions_no_delete BEFORE DELETE ON agreement_versions BEGIN SELECT RAISE(ABORT, 'agreement_versions is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS agreement_events_no_update BEFORE UPDATE ON agreement_events BEGIN SELECT RAISE(ABORT, 'agreement_events is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS agreement_events_no_delete BEFORE DELETE ON agreement_events BEGIN SELECT RAISE(ABORT, 'agreement_events is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS agreement_links_no_update BEFORE UPDATE ON agreement_links BEGIN SELECT RAISE(ABORT, 'agreement_links is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS agreement_links_no_delete BEFORE DELETE ON agreement_links BEGIN SELECT RAISE(ABORT, 'agreement_links is append-only'); END;

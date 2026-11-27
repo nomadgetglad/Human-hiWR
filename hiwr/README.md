@@ -60,6 +60,7 @@ the saved outputs after you change a module on purpose.
 | `hiwr_factory.py` | Factory line (pipe plant): owner-written SOPs as the AI's only source, per-unit check-throughs, quotas, rotation by station certs, foreman board and HR roll call | `factory_demo.py` |
 | `hiwr_signing.py` | Prototype: signed money approvals (Ed25519 keys on the approver's device, registered by the account holder) in a hash chain, so a forged, replayed or edited approval fails `verified_status()`. Needs the `cryptography` package. See `../APPROVALS_SECURITY.md` | `../tests/test_signing.py` |
 | `hiwr_pharmacy.py` | Prescription order status only (no drug names stored), pharmacist verify as a certified task, holds, return to stock after 10 days | `pharmacy_demo.py` |
+| `hiwr_agreements.py` | Business agreements: 14 forms (vendor supply, PO, client service, catering, appointment and late-fee terms, job offer and NC wage notice, contractor, subcontract, construction with the owner, NDA, non-compete, commercial lease, equipment rental, warranty). HiWR proposes, a person confirms, money terms need two certified approvers, each signature is tied to the exact version, and deliveries or disputes open SHIPMENT/DISPUTE tickets with the contract ref. Research in `AGREEMENTS.md` | `agreements_demo.py` |
 
 Generated documents kept as examples: `supply_chain_brief.md`, `contract_dishwasher_temp.md`.
 
@@ -67,6 +68,8 @@ Generated documents kept as examples: `supply_chain_brief.md`, `contract_dishwas
 
 These parts are working models and templates, **not legal advice**:
 
+- **Business agreements** (`hiwr_agreements.py`, `AGREEMENTS.md`): every form carries a lawyer-review
+  disclaimer. The NC checks catch missing or out-of-range terms; they don't make a contract enforceable.
 - **Work agreements** (`hiwr_staff.py`, `contract_dishwasher_temp.md`): template for an employment lawyer
   to review; wage, overtime, break and call-in pay rules vary by state.
 - **HIPAA** (doctor's office check-ins in `hiwr_contacts.py`, `hiwr_processes.py`, `hiwr_pharmacy.py`):
