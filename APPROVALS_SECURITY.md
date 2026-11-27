@@ -33,6 +33,20 @@ capping, revocation cascade, append-only history tables, confirming someone else
 card, SQL in ids, posting the same money twice, posting before double approval, and the top bar by role
 (owner revenue, Finance labor dollars, level-2 percent only, employees tasks only).
 
+## Business agreements (`hiwr_agreements.py`)
+
+Money terms on an agreement (prices, deposits, rent, fees, pay) follow the same rule as money actions: two
+different certified approvers at Finance level, and the new `contract` scope (or the owner-only
+`contract_approval` task) for supply, lease, service and similar agreements. Attacks tested in
+`tests/test_agreements.py`: HiWR confirming, approving or signing its own proposal; the drafter, the person who
+changed the form or the confirmer approving its money; the same approver twice (refused in code and by a unique
+index); an uncertified or demoted approver; approving before Confirm; deciding after a rejection or approval;
+confirming a stale card; signing a different version than the current one; a Lead signing for the business;
+negative, fractional or text dollar amounts; editing or deleting agreements, versions, events or links. A
+change to any term is a new version with a new hash, so earlier approvals and signatures stop counting.
+Existing databases made before this change keep the old `scope` check on `approver_certifications`, so use the
+`contract_approval` task there (or rebuild the table) until a migration lands.
+
 ## Still open (not fixable without real identity)
 
 - **Sign-in is a header.** The UI trusts `X-Member`. Anyone on the shop Wi-Fi who types `X-Member: owner_alex`

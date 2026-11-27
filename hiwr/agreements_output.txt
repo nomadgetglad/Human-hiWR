@@ -1,0 +1,62 @@
+== Agreement forms in HiWR (sample) ==
+  Vendor supply agreement                confirm at Manager         money: contract
+  Purchase order                         confirm at Manager         money: contract
+  Client service agreement               confirm at Manager         money: contract
+  Catering and event agreement           confirm at Manager         money: contract
+  Appointment and late fee terms         confirm at Manager         money: fee
+  Job offer and wage notice              confirm at Manager         money: payroll
+  Independent contractor agreement       confirm at Manager         money: contract
+  Subcontractor agreement                confirm at Account holder  money: subcontract
+  Construction agreement with the owner  confirm at Account holder  money: contract
+  Confidentiality agreement (NDA)        confirm at Manager         money: -
+  Non-compete / non-solicit              confirm at Account holder  money: payroll
+  Commercial lease                       confirm at Account holder  money: contract
+  Equipment lease or rental              confirm at Manager         money: contract
+  Warranty terms                         confirm at Manager         money: -
+
+1. HiWR notices: [{'vendor': 'Coastal Produce', 'deliveries': 4, 'suggest': 'vendor_supply'}]
+2. Card for chef_marco: draft - needs fixes | must fix: ['Food deliveries need a quality spec checked at receiving (temps, NSF, food code)']
+   Money: [('Roma tomatoes per 25 lb case', '$34.00'), ('Romaine per 24 ct case', '$41.50')] | PENDING - requires double approval: two certified contract approvers
+3. HiWR tries to confirm: HiWR proposes; a person has to confirm
+   chef_marco confirms: PENDING - requires double approval (0/2)
+4. chef_marco approves money: chef_marco is not certified for contract approvals
+   manager_jo approves: PENDING - requires double approval (1/2)
+   accounting_sue approves: APPROVED
+5. Vendor accepts by email: awaiting acceptance: business
+   Owner signs: active
+
+6. Thursday delivery, invoice INV-2207: 8 of 10 cases of tomatoes, billed $36.00 instead of $34.00
+   SHP-0001 priority 27: Coastal Produce: delivery off agreement AGR-0001
+   contract AGR-0001 v2 (deb4940fc843) | variance $84.00 | ask Coastal Produce for a credit of $84.00
+   lands in anticipated costs; PENDING - requires double approval before any credit or refund is posted
+   Links on the agreement: [('ticket', 'SHP-0001'), ('invoice', 'INV-2207')]
+
+7. What cook_luis sees (money hidden):
+   - Items, unit and agreed price: Roma tomatoes 25 lb case at (hidden); Romaine 24 ct case at (hidden)
+   - Delivery days: Mon, Thu before 10 AM
+   - Pay within (days): 15
+   - Food or drink items: yes
+   - Quality spec at receiving (temps, NSF, food code): Produce at or below 41F on arrival, no soft or split fruit
+   - If short or damaged: credit
+   - Report problems within (hours): 24
+   - Starts: 2026-12-01
+   - Ends: 2027-05-31
+   
+   ## Sign-off
+   
+   - Confirmed by chef_marco 2026-12-01T09:00
+   - Money terms approved by manager_jo 2026-12-01T09:00
+   - Money terms approved by accounting_sue 2026-12-01T09:00
+   - Vendor accepted (email reply) 2026-12-01T09:00, recorded by chef_marco
+   - Business accepted (e signature) 2026-12-01T09:00, recorded by owner_alex
+
+8. Vendor raises romaine to $43.50 from January: a new version
+   Status now: draft - awaiting confirmation (old approvals and signatures don't carry over)
+
+9. Forms HiWR won't let through
+   Offer letter: ['Pay is below the $7.25 minimum wage']
+   House build: Work of $40,000 or more needs an NC general contractor license number (G.S. 87-1)
+   House build: Improvements of $40,000 or more need a lien agent named before the first contract (G.S. 44A-11.1), unless it is an existing home the owner lives in
+   Non-compete: ['A non-compete needs something in return: a new job, or for a current worker a raise or bonus'] | note: ['NC courts have generally approved up to 2 years; longer is at risk']
+
+Template for review by a North Carolina lawyer before use. Not legal advice. HiWR checks the form is complete and consistent; it does not decide whether it is enforceable.

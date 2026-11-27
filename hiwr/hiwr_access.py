@@ -11,7 +11,7 @@ Tasks (inventory audit, roll call, receiving check, ...) are certified separatel
   - The account holder can certify anyone for any task, and may let them certify others.
   - A certified person can pass on only a task they hold right now, never the right to pass it on
     again, and never past their own expiry date.
-  - Money approvals (refund, payroll, fee) and levels are granted by the account holder only,
+  - Money approvals (refund, payroll, fee, subcontract, contract) and levels are granted by the account holder only,
     and money approvals only to people at Finance level or above.
   - Revoking a certifier switches off every grant that came through them.
 Every grant, revocation and sensitive read is logged; nothing is deleted.
@@ -22,7 +22,8 @@ LEVEL_NAMES = {0: "Staff", 1: "Lead", 2: "Manager", 3: "Finance", 4: "Account ho
 DATA_LEVEL = {"own_schedule": 0, "ticket_status": 0, "team_schedule": 1, "inventory_counts": 1, "roll_call": 1,
               "client_records": 2, "order_costs": 2, "vendor_prices": 2, "purchase_drafts": 2,
               "payroll": 3, "financial_block": 3, "money_actions": 3, "permissions": 4}
-OWNER_ONLY_TASKS = {"refund_approval", "payroll_approval", "fee_approval", "subcontract_approval"}
+OWNER_ONLY_TASKS = {"refund_approval", "payroll_approval", "fee_approval", "subcontract_approval",
+                    "contract_approval"}
 
 
 def level(db, member):
