@@ -1,0 +1,46 @@
+1. HiWR: QUANTITIES, SAMPLE TO SAMPLE (one week each; rent and utilities spread by day)
+   sample        net sales      food     bev   labor   prime  margin
+   10-19..10-25   $22,444.15   30.0%   21.0%   33.7%   62.2%   33.2%
+   10-26..11-01   $22,310.90   30.0%   21.0%   34.0%   62.5%   32.9%
+   11-02..11-08   $22,980.98   31.3%   21.0%   32.9%   62.4%   33.0%
+   11-09..11-15   $23,226.44   32.7%   21.0%   36.2%   66.9%   28.5%   moved: labor +3.3, prime +4.5, margin -4.5
+   11-16..11-22   $23,630.84   34.0%   21.0%   35.8%   67.6%   27.8%
+
+   Same table for chef_marco (Manager):
+   sample          food     bev   labor   prime  margin
+   10-19..10-25   30.0%   21.0%   33.7%   62.2%   33.2%
+   10-26..11-01   30.0%   21.0%   34.0%   62.5%   32.9%
+   11-02..11-08   31.3%   21.0%   32.9%   62.4%   33.0%
+   11-09..11-15   32.7%   21.0%   36.2%   66.9%   28.5%   moved: labor +3.3, prime +4.5, margin -4.5
+   11-16..11-22   34.0%   21.0%   35.8%   67.6%   27.8%
+   chef_marco asks for a snapshot with dollars: BLOCKED: snapshots carry dollars; needs Finance level (3), chef_marco is level 2
+
+   Latest sample quantities HiWR hands to Human: 465 labor hours at $16.92/h avg, 1176 plates at $16.49, 470 drinks at $9.01, waste $450, vendor shares {'Harbor Seafood': 13.0, 'Sysco': 21.0}
+
+2. Human: OPTIONS AND NEEDED QUANTITIES to hold the margin of the steady week of Oct 26
+Margin 27.8% vs target 32.9% (previous sample 32.9%)
+   break-even net sales $8,886.98; to keep 32.9% by more covers alone (same costs per sale) it would need $33,843.32, it did $23,630.84
+   Gap $1,205.17. Options, cheapest to the guest first:
+   - food_cost       needs: recover $775.90, target pct 30.0%   [Manager + owner]  (64% of gap)
+        Harbor Seafood went 9.0% -> 13.0% of food sales. Check its prices against the quote, price an alternate vendor in Ordering, and check portions on top sellers in Stew
+   - waste           needs: recover $225.00, waste to avoid $225.00   [Chef]  (83% of gap)
+        prep to the hourly forecast (Prep level) and run back stock as specials before it turns
+   - labor           needs: recover $425.36, hours to move 25.1, target pct 34.0%   [Manager]  (100% of gap)
+        take the hours from the slowest stretches in the schedule draft; keep minimum staffing; no pay rate changes
+   - beverage_attach needs: recover $170.83, extra drinks 24   [Manager]  (100% of gap)
+        suggest a drink at order; 24 more drinks at $9.01 average
+
+   Owner-set floor instead (25% margin): 
+Margin 27.8% vs target 25.0% (previous sample 32.9%)
+   break-even net sales $8,886.98; to keep 25.0% by more covers alone (same costs per sale) it would need $20,213.33, it did $23,630.84
+   Margin held, $661.66 above target.
+
+3. KEEPING THE BUILDS IN STEP
+   Human given an old snapshot: REFUSED: snapshot is contract 0.9, Human is built for 1.0: rebuild both together
+   Snapshot missing a field: REFUSED: snapshot doesn't match contract 1.0: missing ['drinks_sold'], unknown []
+
+4. OWNER PICKS, LOGGED WITH THE NEEDED QUANTITIES
+   11-16..11-22 food_cost        expects $775.90  needs recover $775.90, target pct 30.0%
+   11-16..11-22 labor            expects $425.36  needs recover $425.36, hours to move 25.1, target pct 34.0%
+   11-16..11-22 beverage_attach  expects $170.83  needs recover $170.83, extra drinks 24
+   accounting_sue picks the waste option: BLOCKED: the account holder picks how to hold margin

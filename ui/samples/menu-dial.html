@@ -1,0 +1,508 @@
+<title>Human Menu</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap">
+<style>
+/* Layout: one phone column. Dial of four sides on top, the voice/chat line under it, the two direction circles at the bottom, the open screen below. */
+:root {
+  --bg: #11151c; --surface: #1a2029; --raised: #232b36; --line: #303a48;
+  --fg: #eef1f5; --muted: #9aa5b4;
+  --human: #f2b33d; --human-ink: #1b1405;   /* Human: output, drafts that go to a person */
+  --hiwr: #5cc8d6;  --hiwr-ink: #04181b;    /* HiWR: input, the record */
+  --good: #6fd39f; --warn: #f0a35b; --bad: #ef6f6f;
+  --display: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
+  --body: "Inter", "Segoe UI", system-ui, sans-serif;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 15px; line-height: 1.45; }
+.app { max-width: 430px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 14px 32px; }
+button, select, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 3px solid var(--hiwr); outline-offset: 2px; }
+.sr { position: absolute; left: -9999px; }
+
+header { display: flex; align-items: center; gap: 10px; }
+.logo { width: 34px; height: 34px; border-radius: 9px; background: var(--raised); display: grid; place-items: center;
+  font-family: var(--display); font-weight: 700; color: var(--human); font-size: 20px; }
+.brand { font-family: var(--display); font-weight: 700; font-size: 20px; flex: 1; }
+.role { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; max-width: 58%; }
+
+/* Dial: four sides on a ring; the chosen side turns to the top */
+.dial-wrap { display: grid; place-items: center; gap: 6px; touch-action: pan-y; }
+.dial { --size: min(76vw, 280px); --r: calc(var(--size) / 2 - 34px); position: relative; width: var(--size); aspect-ratio: 1; max-width: 100%; }
+.ring { position: absolute; inset: 0; border-radius: 50%; border: 2px dashed var(--line); transition: transform .6s cubic-bezier(.3,.7,.2,1); }
+.ring::before { content: ""; position: absolute; left: 50%; top: -9px; width: 14px; height: 14px; margin-left: -7px; border-radius: 50%; background: var(--fg); }
+.node { position: absolute; left: 50%; top: 50%; width: 82px; height: 82px; margin: -41px 0 0 -41px; border-radius: 50%;
+  border: 2px solid var(--line); background: var(--surface); display: grid; place-content: center; text-align: center;
+  font-family: var(--display); font-weight: 700; font-size: 12px; line-height: 1.15;
+  transition: transform .6s cubic-bezier(.3,.7,.2,1), border-color .3s, background .3s; }
+.node small { display: block; font-family: var(--body); font-weight: 500; font-size: 11px; color: var(--muted); margin-top: 2px; }
+.node[aria-pressed="true"] { border-color: var(--fg); background: var(--raised); }
+.hub { position: absolute; inset: 31%; border-radius: 50%; display: grid; place-items: center; text-align: center; pointer-events: none; }
+.hub strong { font-family: var(--display); font-size: 19px; display: block; }
+.hub span { font-size: 12px; color: var(--muted); }
+.hint { font-size: 12px; color: var(--muted); }
+
+/* Voice / chat line */
+.ask { display: flex; gap: 8px; align-items: center; }
+.ask input { flex: 1; min-width: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 24px; padding: 12px 16px; min-height: 48px; }
+.ask input::placeholder { color: var(--muted); }
+.round { width: 48px; height: 48px; border-radius: 50%; border: 0; display: grid; place-items: center; flex: none; }
+.round.mic { background: var(--raised); } .round.mic[aria-pressed="true"] { background: var(--bad); color: var(--bg); }
+.round.send { background: var(--human); color: var(--human-ink); }
+.round svg { width: 22px; height: 22px; }
+.reply { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; display: grid; gap: 8px; }
+.reply .q { font-size: 13px; color: var(--muted); }
+.suggest { display: flex; flex-wrap: wrap; gap: 6px; }
+.suggest button { border: 1px solid var(--line); background: transparent; border-radius: 999px; padding: 6px 12px; font-size: 13px; color: var(--muted); min-height: 36px; }
+
+/* The two circles */
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.circle { aspect-ratio: 1; border-radius: 50%; border: 3px solid currentColor; background: var(--surface);
+  display: grid; place-content: center; gap: 2px; text-align: center; padding: 10px; transition: background .2s, transform .15s; }
+.circle:active { transform: scale(.97); }
+.circle.hiwr { color: var(--hiwr); } .circle.human { color: var(--human); }
+.circle[aria-pressed="true"].hiwr { background: var(--hiwr); color: var(--hiwr-ink); }
+.circle[aria-pressed="true"].human { background: var(--human); color: var(--human-ink); }
+.circle b { font-family: var(--display); font-size: 22px; }
+.circle i { font-style: normal; font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
+.circle em { font-style: normal; font-size: 12px; opacity: .9; }
+
+/* Screen */
+.panel { display: flex; flex-direction: column; gap: 10px; }
+.panel h2 { font-family: var(--display); font-size: 18px; margin: 0; text-wrap: balance; }
+.sub { margin: 0; color: var(--muted); font-size: 13px; }
+.item { background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--edge, var(--line)); border-radius: 14px; padding: 14px; display: grid; gap: 8px; min-width: 0; }
+.item .top { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+.item h3 { margin: 0; font-size: 15px; font-weight: 600; min-width: 0; }
+.amt { font-variant-numeric: tabular-nums; font-weight: 700; white-space: nowrap; }
+.amt.late { color: var(--bad); } .amt.soon { color: var(--warn); }
+.item p { margin: 0; color: var(--muted); font-size: 13px; }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn { border: 0; border-radius: 10px; padding: 12px 14px; min-height: 48px; font-weight: 600; }
+.btn.human { background: var(--human); color: var(--human-ink); }
+.btn.hiwr { background: var(--hiwr); color: var(--hiwr-ink); }
+.btn.ghost { background: var(--raised); }
+.chip { justify-self: start; display: inline-block; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: var(--raised); }
+.chip.wait { color: var(--warn); } .chip.ok { color: var(--good); } .chip.lock { color: var(--muted); }
+.locked { text-align: center; padding: 20px 14px; color: var(--muted); border: 1px dashed var(--line); border-radius: 14px; }
+.tabs { display: flex; gap: 8px; }
+.tabs button { flex: 1; min-height: 44px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); font-weight: 600; }
+.tabs button[aria-pressed="true"] { background: var(--raised); border-color: var(--fg); }
+.thread { display: flex; flex-direction: column; gap: 8px; }
+.msg { border-radius: 12px; padding: 10px 12px; max-width: 90%; background: var(--surface); border: 1px solid var(--line); display: grid; gap: 6px; }
+.msg.up { align-self: flex-end; border-color: var(--human); }
+.msg.down { align-self: flex-start; border-color: var(--good); }
+.msg .who { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.chart { width: 100%; height: auto; display: block; }
+.chart text { fill: var(--muted); font-size: 11px; font-family: var(--body); }
+.chart .grid { stroke: var(--line); stroke-width: 1; }
+.chart .l1 { stroke: var(--human); fill: none; stroke-width: 2.5; }
+.chart .l2 { stroke: var(--hiwr); fill: none; stroke-width: 2.5; }
+.chart .tgt { stroke: var(--bad); stroke-dasharray: 4 4; stroke-width: 1.5; }
+.legend { display: flex; gap: 14px; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
+.legend span::before { content: ""; display: inline-block; width: 10px; height: 3px; margin-right: 6px; vertical-align: middle; background: var(--c); }
+.mail { display: grid; gap: 8px; }
+.mail .item { padding: 10px 12px; }
+.toggle { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+.toggle:first-of-type { border-top: 0; }
+.toggle p { margin: 0; font-size: 12px; color: var(--muted); }
+.switch { width: 52px; height: 30px; border-radius: 15px; border: 0; background: var(--raised); position: relative; flex: none; }
+.switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%; background: var(--muted); transition: left .2s; }
+.switch[aria-checked="true"] { background: var(--good); }
+.switch[aria-checked="true"]::after { left: 25px; background: var(--bg); }
+.switch:disabled { opacity: .45; cursor: not-allowed; }
+.toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--fg); color: var(--bg);
+  padding: 10px 16px; border-radius: 10px; font-weight: 600; font-size: 13px; z-index: 30; max-width: calc(100% - 32px); }
+.note { font-size: 12px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 12px; margin: 0; }
+@media (prefers-reduced-motion: reduce) { .ring, .node { transition: none; } }
+</style>
+
+<div class="app">
+  <header>
+    <div class="logo" aria-hidden="true">H</div>
+    <div class="brand">Human</div>
+    <label class="sr" for="role">Signed in as</label>
+    <select class="role" id="role">
+      <option value="0">Luis · Cook (Staff)</option>
+      <option value="2" selected>Marco · Chef (Manager)</option>
+      <option value="3">Sue · Accounting (Finance)</option>
+      <option value="4">Alex · Owner</option>
+    </select>
+  </header>
+
+  <section class="dial-wrap" aria-label="Main menu">
+    <div class="dial" id="dial">
+      <div class="ring" id="ring"></div>
+      <div id="nodes"></div>
+      <div class="hub"><div><strong id="hub-title"></strong><span id="hub-sub"></span></div></div>
+    </div>
+    <div class="hint">Tap a side or swipe the dial to turn it</div>
+  </section>
+
+  <section aria-label="Ask Human">
+    <form class="ask" id="ask">
+      <button type="button" class="round mic" id="mic" aria-pressed="false" aria-label="Hold to talk">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3" fill="none"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+      </button>
+      <label class="sr" for="q">Ask a question or give a command</label>
+      <input id="q" autocomplete="off" placeholder="Ask, or tell Human what to do">
+      <button class="round send" type="submit" aria-label="Send">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+      </button>
+    </form>
+    <div id="answer" style="margin-top:10px"></div>
+  </section>
+
+  <section class="pair" aria-label="In or out">
+    <button class="circle hiwr" id="c-in" aria-pressed="false"><i>HiWR</i><b>In</b><em id="in-sub">Put it on the record</em></button>
+    <button class="circle human" id="c-out" aria-pressed="true"><i>Human</i><b>Out</b><em id="out-sub"></em></button>
+  </section>
+
+  <section class="panel" id="panel" aria-live="polite"></section>
+
+  <p class="note">The line above the circles takes voice or typing. Human answers, runs commands in the app, shows graphs, routes mail and calendar events to the right side, and flips action toggles you're allowed to change. Sample menu with sample data from the demos. HiWR is the record: what people put in. Human works from it and puts drafts out to a person, who approves. Every send for approval and every sign-off coming back also lands in the approvals chat under Scheduling. Human never moves money, places an order or changes access on its own.</p>
+</div>
+
+<script>
+const SIDES = ["accounting", "inventory", "staff", "scheduling"];
+const NAMES = { accounting: "Accounting", inventory: "Inventory", staff: "Staff", scheduling: "Scheduling" };
+// min = lowest level that sees it; need = level that can approve (0 = just a task)
+const DATA = {
+  accounting: {
+    seeOut: 2,
+    in: [
+      { t: "Snap an invoice", d: "Photo of the paper invoice. HiWR reads vendor, number and total; you confirm.", draft: "Sysco invoice #4471, $691.42, food cost.", min: 0, route: true },
+      { t: "Enter today's sales", d: "From the register's Z-report: food, bar, sales tax.", draft: "Food $2,410.00, bar $548.00, sales tax $214.45.", min: 2 },
+      { t: "Add a receipt", d: "Store runs and small purchases.", draft: "Lowes $212.18, supplies.", min: 0, route: true },
+      { t: "Import the POS export", d: "Square item sales file, mapped once during setup.", draft: "21 days, 126 item lines, 6 days already on the record.", min: 3 },
+    ],
+    out: [
+      { id: "a1", t: "Classify Restaurant Depot", amt: "$234.12", d: "Human couldn't settle it. Most likely supplies (smallwares).", need: 3, to: "Sue (Finance)", edge: "var(--warn)" },
+      { id: "a2", t: "Hold margin for the week of 11-16", amt: "27.8% vs 32.9%", pct: true, d: "Food cost back to 30% (Harbor Seafood went up), move 25 labor hours, 24 more drinks.", need: 4, to: "Alex (Owner)", edge: "var(--bad)" },
+      { id: "a3", t: "Sales tax balance", amt: "$6,277.13", d: "Collected and not yet paid to the state. Due date follows your filing schedule.", need: 3, to: "the accountant", edge: "var(--line)", min: 3 },
+      { id: "a4", t: "QuickBooks has $412.50 HiWR doesn't", amt: "$412.50", d: "Benefits entered only in QuickBooks. QuickBooks stays the record; add the source here.", need: 3, to: "the bookkeeper", edge: "var(--line)", min: 3 },
+    ],
+  },
+  inventory: {
+    seeOut: 0,
+    in: [
+      { t: "Receive a delivery", d: "PO #1 Harbor Seafood is due. Scan cases, take temps, mark shorts.", draft: "White fish 800 of 960 oz at 38°F. Short 160 oz.", min: 0 },
+      { t: "Count a shelf", d: "Scan or tap counts for the walk-in or dry storage.", draft: "Walk-in: roma tomato 1,200 oz, cilantro 30 oz.", min: 0 },
+      { t: "Log waste", d: "What was thrown out and why.", draft: "Roma tomato 48 oz, soft.", min: 0 },
+      { t: "Scan a UPC", d: "Look up an item and how much is on hand.", draft: "0004068200071 roma tomato: 1,200 oz on hand.", min: 0 },
+    ],
+    out: [
+      { id: "i1", t: "Sysco order, order by today", amt: "$969.08", d: "11 lines with UPCs from the next 21 days of forecast. Tomato left off: back stock covers it.", need: 2, to: "Marco (Chef)", edge: "var(--warn)", min: 1 },
+      { id: "i2", t: "Roma tomato is cheaper at US Foods", amt: "about $7.35/week", d: "8.0 vs 9.5 cents per oz, 25 lb case, 3-day lead. From your approved US Foods order guide.", need: 2, to: "Marco (Chef)", edge: "var(--line)", min: 2 },
+      { id: "i3", t: "Harbor Seafood came in short", amt: "160 oz", d: "SHP-0001 is open. The credit is pending, not booked.", need: 0, to: "Marco (Chef)", edge: "var(--bad)", min: 0 },
+      { id: "i4", t: "Use 621 oz of roma tomato before 11-25", amt: "621 oz", d: "Tomato salad special, transfer 300 oz downtown, or donate before it turns.", need: 2, to: "Marco (Chef)", edge: "var(--line)", min: 0 },
+    ],
+  },
+  staff: {
+    seeOut: 0,
+    in: [
+      { t: "Clock in or out", d: "Tap or badge on the kitchen tablet.", draft: "Clocked in 3:58 PM.", min: 0 },
+      { t: "Request time off", d: "Goes to your manager; you'll see the answer here.", draft: "Off Sat 11-28, family event.", min: 0, route: true },
+      { t: "Set my availability", d: "Days and hours you can work.", draft: "Mon to Fri after 3 PM.", min: 0 },
+      { t: "Roll call", d: "Who is here for this shift.", draft: "6 of 7 in. Dishwasher missing.", min: 1 },
+    ],
+    out: [
+      { id: "s1", t: "Tonight needs one more dishwasher", amt: "6 PM to close", d: "3 people nearby are available and certified. Offer goes out by text when you send it.", need: 2, to: "Marco (Chef)", edge: "var(--bad)", min: 1 },
+      { id: "s2", t: "Rosa asked for Saturday off", amt: "Sat 11-28", d: "Covering her fryer shift leaves the line at minimum staffing.", need: 2, to: "Marco (Chef)", edge: "var(--warn)", min: 1 },
+      { id: "s3", t: "Your next shifts", amt: "3 this week", d: "Mon 4 PM, Wed 4 PM, Fri 5 PM, fryer.", need: 0, to: "you", edge: "var(--line)", min: 0, only: 0 },
+      { id: "s4", t: "Temp dishwasher agreement", amt: "$15.00/h", d: "Prime-time hours, call-in pay if we cancel late. Ready to sign.", need: 3, to: "Sue (Finance)", edge: "var(--line)", min: 3 },
+    ],
+  },
+  scheduling: {
+    seeOut: 0,
+    in: [
+      { t: "Add a deadline", d: "Something that has to be done by a time.", draft: "Walk-in deep clean by Tue 11-24, 10 AM.", min: 1 },
+      { t: "Mark work done", d: "Finished a task? It goes to whoever gave it for sign-off.", draft: "Fryer oil changed and logged, 4:40 PM.", min: 0, route: true, fulfil: true },
+      { t: "Book an appointment", d: "Reservation, delivery window or inspection.", draft: "Party of 12, Fri 7:30 PM, table 5+6.", min: 1 },
+    ],
+    out: [],   // deadlines + approvals chat are drawn separately
+  },
+};
+const DEADLINES = [
+  { t: "Sysco order cut-off", when: "today 4:00 PM", cls: "late", who: "Marco", min: 1 },
+  { t: "Fry 2 batches of tortilla chips", when: "today 5:30 PM", cls: "soon", who: "Rosa", min: 0 },
+  { t: "Walk-in deep clean", when: "Tue 10:00 AM", cls: "", who: "Luis", min: 0 },
+  { t: "Health inspection", when: "Thu 2:00 PM", cls: "", who: "Marco", min: 1 },
+  { t: "Payroll approval", when: "Fri 12:00 PM", cls: "", who: "Sue + Alex", min: 3 },
+];
+const CHAT = [
+  { dir: "up", who: "Human → Marco", text: "Sysco order $969.08 is ready for your approval. Order by today 4:00 PM.", ref: "i1", min: 1 },
+  { dir: "up", who: "Luis → Marco", text: "Work done: walk-in floor scrubbed, 3:10 PM. Photo attached.", ref: "w1", min: 0 },
+  { dir: "down", who: "Marco → Luis", text: "Signed off: walk-in floor scrubbed. Work fulfilled.", min: 0 },
+  { dir: "up", who: "Human → Sue", text: "Invoice Harbor Seafood #8812 billed 6% over the PO price. Credit request drafted.", min: 3 },
+];
+
+const sent = {};
+let side = "inventory", dir = "out", angle = -90, schedTab = "chat", acctTab = "approve";
+const TXNS = [
+  { when: "11-22 8:14 PM", who: "Maria Lopez", what: "Dinner, party of 4 · POS-1042 · card", amt: 8640 },
+  { when: "11-22 7:02 PM", who: "Walk-in", what: "Bar tab · POS-1031 · cash", amt: 4150 },
+  { when: "11-21 6:30 PM", who: "Maria Lopez", what: "Refund: burger sent with tomato · DSP-0007 · 2 approvals", amt: -2450 },
+  { when: "11-21 1:15 PM", who: "Harbor Yacht Club", what: "Catering deposit, 40 guests · invoice 1188", amt: 60000 },
+  { when: "11-20 12:40 PM", who: "Sam Carter", what: "Western boot deposit · made to order", amt: 30000 },
+];
+const ORDERS = [
+  { po: "PO #2", v: "Sysco", st: "Waiting on Marco's approval", d: "11 lines, order by today 4:00 PM", amt: 96908, cls: "wait" },
+  { po: "PO #3", v: "Pine St Bakery", st: "Sent, delivery Tue 7 AM", d: "Brioche 12 x 4 dz", amt: 25920, cls: "" },
+  { po: "PO #4", v: "Harbor Seafood", st: "Held: open ticket SHP-0001", d: "White fish 12 x 10 lb", amt: 105600, cls: "lock" },
+  { po: "PO #1", v: "Harbor Seafood", st: "Received short, credit pending", d: "160 oz short, billed 6% over PO", amt: 52800, cls: "wait" },
+];
+const usd = (c) => (c < 0 ? "-" : "") + "$" + (Math.abs(c) / 100).toLocaleString("en-US", { minimumFractionDigits: 2 });
+const $ = (id) => document.getElementById(id);
+const role = () => Number($("role").value);
+const ROLE_NAME = () => $("role").selectedOptions[0].textContent.split(" ·")[0];
+
+function outItems(s) {
+  const r = role();
+  return DATA[s].out.filter((x) => r >= (x.min ?? 0) && (x.only === undefined || r === x.only));
+}
+function waiting(s) {
+  if (s === "scheduling") return CHAT.filter((m) => m.dir === "up" && role() >= m.min && !m.done).length;
+  if (role() < DATA[s].seeOut) return 0;
+  return outItems(s).filter((x) => !sent[x.id]).length;
+}
+
+function drawNodes() {
+  $("nodes").innerHTML = SIDES.map((s, k) => {
+    const a = k * 90 + angle;
+    return `<button class="node" data-side="${s}" aria-pressed="${s === side}"
+      style="transform: rotate(${a}deg) translateY(calc(-1 * var(--r))) rotate(${-a}deg)">${NAMES[s]}<small>${
+      role() < DATA[s].seeOut ? "in only" : waiting(s) + " waiting"}</small></button>`;
+  }).join("");
+  $("nodes").querySelectorAll(".node").forEach((b) => b.onclick = () => turnTo(b.dataset.side));
+}
+
+function render() {
+  drawNodes();
+  const r = role(), w = waiting(side), locked = r < DATA[side].seeOut;
+  $("hub-title").textContent = NAMES[side];
+  $("hub-sub").textContent = locked ? "you can add here" : `${w} waiting`;
+  $("c-in").setAttribute("aria-pressed", dir === "in");
+  $("c-out").setAttribute("aria-pressed", dir === "out");
+  $("out-sub").textContent = locked ? "for managers" : side === "scheduling" ? "Deadlines + approvals" : `${w} to approve`;
+  const p = $("panel");
+
+  if (dir === "in") {
+    const items = DATA[side].in.filter((x) => r >= x.min);
+    p.innerHTML = `<h2>HiWR In · ${NAMES[side]}</h2><p class="sub">Put it on the record. Nothing saves until you confirm.</p>` +
+      items.map((x, i) => `<div class="item" style="--edge:var(--hiwr)"><div class="top"><h3>${x.t}</h3></div><p>${x.d}</p>
+        <div class="actions"><button class="btn hiwr" data-in="${i}">Start</button></div><div id="draft-${i}" hidden></div></div>`).join("");
+    p.querySelectorAll("[data-in]").forEach((b) => b.onclick = () => {
+      const x = items[b.dataset.in], box = $("draft-" + b.dataset.in);
+      box.hidden = false;
+      box.innerHTML = `<div class="item" style="--edge:var(--hiwr);background:var(--raised)"><p style="color:var(--fg)">Draft: ${x.draft}</p>
+        <div class="actions"><button class="btn hiwr" data-ok>Confirm</button><button class="btn ghost" data-fix>Fix</button></div></div>`;
+      box.querySelector("[data-ok]").onclick = () => {
+        if (x.route) {
+          CHAT.push({ dir: "up", who: `${ROLE_NAME()} → ${x.fulfil ? "Marco" : r >= 2 ? "Sue" : "Marco"}`,
+            text: (x.fulfil ? "Work done: " : "For approval: ") + x.draft, min: 0 });
+          box.innerHTML = `<span class="chip wait">Saved, and sent up for ${x.fulfil ? "sign-off" : "approval"}</span>`;
+          toast("Saved. It's in the approvals chat.");
+        } else {
+          box.innerHTML = `<span class="chip ok">Saved to the record</span>`; toast("Saved to HiWR");
+        }
+        drawNodes();
+      };
+      box.querySelector("[data-fix]").onclick = () => toast("Edit the fields, then confirm");
+    });
+    return;
+  }
+  if (locked) {
+    p.innerHTML = `<h2>Human Out · ${NAMES[side]}</h2><div class="locked">Results here are for managers and finance.<br>You can still add receipts and invoices on the HiWR In side.</div>`;
+    return;
+  }
+  if (side === "scheduling") return renderScheduling(p);
+  if (side === "accounting" && acctTab !== "approve") return renderRecords(p);
+
+  const items = outItems(side);
+  p.innerHTML = `<h2>Human Out · ${NAMES[side]}</h2>` + (side === "accounting" ? acctTabs() : "") +
+    `<p class="sub">Drafts Human made from the record. A person approves each one.</p>` +
+    items.map((x) => {
+      const state = sent[x.id], canApprove = x.need > 0 && r >= x.need;
+      let act;
+      if (state === "approved") act = `<span class="chip ok">Approved by ${ROLE_NAME()}</span>`;
+      else if (state === "sent") act = `<span class="chip wait">Waiting on ${x.to}</span>`;
+      else if (x.need === 0) act = `<button class="btn ghost" data-act="${x.id}" data-k="task">Add to my tasks</button>`;
+      else act = (canApprove ? `<button class="btn human" data-act="${x.id}" data-k="approved">Approve</button>` : "") +
+        (x.to.startsWith(ROLE_NAME()) ? "" : `<button class="btn ${canApprove ? "ghost" : "human"}" data-act="${x.id}" data-k="sent">Send to ${x.to}</button>`);
+      return `<div class="item" style="--edge:${x.edge}"><div class="top"><h3>${x.t}</h3><span class="amt">${x.amt}</span></div>
+        <p>${x.d}</p><div class="actions">${act}</div></div>`;
+    }).join("") + (items.length ? "" : `<div class="locked">Nothing waiting on this side.</div>`);
+  p.querySelectorAll("[data-act]").forEach((b) => b.onclick = () => act(b.dataset.act, b.dataset.k));
+  wireAcctTabs(p);
+}
+function acctTabs() {
+  return `<div class="tabs"><button data-at="approve" aria-pressed="${acctTab === "approve"}">To approve</button>
+    <button data-at="txns" aria-pressed="${acctTab === "txns"}">Transactions</button>
+    <button data-at="orders" aria-pressed="${acctTab === "orders"}">Active orders</button></div>`;
+}
+function wireAcctTabs(p) { p.querySelectorAll("[data-at]").forEach((b) => b.onclick = () => { acctTab = b.dataset.at; render(); }); }
+function renderRecords(p) {
+  if (acctTab === "txns") {
+    const net = TXNS.reduce((a, t) => a + t.amt, 0);
+    p.innerHTML = `<h2>Human Out · Accounting</h2>${acctTabs()}<p class="sub">Past client transactions from the record, newest first. ${usd(net)} across these ${TXNS.length}.</p>` +
+      TXNS.map((t) => `<div class="item" style="--edge:${t.amt < 0 ? "var(--bad)" : "var(--line)"}"><div class="top"><h3>${t.who}</h3>
+        <span class="amt" style="color:${t.amt < 0 ? "var(--bad)" : "var(--fg)"}">${usd(t.amt)}</span></div><p>${t.when} · ${t.what}</p></div>`).join("");
+  } else {
+    const open = ORDERS.filter((o) => !o.st.startsWith("Received")).reduce((a, o) => a + o.amt, 0);
+    p.innerHTML = `<h2>Human Out · Accounting</h2>${acctTabs()}<p class="sub">Inventory orders still open. ${usd(open)} committed, counted as anticipated until the invoice is on the record.</p>` +
+      ORDERS.map((o) => `<div class="item" style="--edge:${o.cls === "wait" ? "var(--warn)" : o.cls === "lock" ? "var(--bad)" : "var(--good)"}">
+        <div class="top"><h3>${o.po} · ${o.v}</h3><span class="amt">${usd(o.amt)}</span></div><p>${o.d}</p>
+        <span class="chip ${o.cls || "ok"}">${o.st}</span></div>`).join("");
+  }
+  wireAcctTabs(p);
+}
+
+function act(id, k) {
+  const x = SIDES.flatMap((s) => DATA[s].out).find((o) => o.id === id);
+  sent[id] = k === "task" ? "approved" : k;
+  if (k === "sent") CHAT.push({ dir: "up", who: `${ROLE_NAME()} → ${x.to}`, text: `For approval: ${x.t} (${x.amt}).`, min: 0 });
+  if (k === "approved") CHAT.push({ dir: "down", who: `${ROLE_NAME()} → team`, text: `Approved: ${x.t} (${x.amt}).`, min: 0 });
+  toast(k === "approved" ? "Approved and logged with your name" : k === "task" ? "Added to your tasks" : "Sent. It's in the approvals chat.");
+  render();
+}
+
+function renderScheduling(p) {
+  const r = role();
+  p.innerHTML = `<h2>Human Out · Scheduling</h2>
+    <div class="tabs"><button data-tab="chat" aria-pressed="${schedTab === "chat"}">Approvals chat</button>
+    <button data-tab="dl" aria-pressed="${schedTab === "dl"}">Deadlines</button></div>` +
+    (schedTab === "dl"
+      ? DEADLINES.filter((d) => r >= d.min).map((d) => `<div class="item" style="--edge:${d.cls === "late" ? "var(--bad)" : d.cls ? "var(--warn)" : "var(--line)"}">
+          <div class="top"><h3>${d.t}</h3><span class="amt ${d.cls}">${d.when}</span></div><p>${d.who}</p></div>`).join("")
+      : `<p class="sub">Invoices and orders go up to whoever approves them. Approvals and sign-offs for finished work come back down.</p>
+         <div class="thread">` + CHAT.filter((m) => r >= m.min).map((m, i) => `<div class="msg ${m.dir}">
+           <span class="who">${m.dir === "up" ? "↑ to approve" : "↓ from approver"} · ${m.who}</span><span>${m.text}</span>
+           ${m.dir === "up" && !m.done && r >= 2 ? `<div class="actions"><button class="btn human" data-sign="${CHAT.indexOf(m)}">${m.text.startsWith("Work done") ? "Sign off" : "Approve"}</button></div>` : ""}
+           ${m.done ? `<span class="chip ok">${m.done}</span>` : ""}</div>`).join("") + `</div>`);
+  p.querySelectorAll("[data-tab]").forEach((b) => b.onclick = () => { schedTab = b.dataset.tab; render(); });
+  p.querySelectorAll("[data-sign]").forEach((b) => b.onclick = () => {
+    const m = CHAT[b.dataset.sign], work = m.text.startsWith("Work done");
+    m.done = work ? "Signed off" : "Approved";
+    CHAT.push({ dir: "down", who: `${ROLE_NAME()} → ${m.who.split(" → ")[0]}`,
+      text: work ? `Signed off: ${m.text.replace("Work done: ", "")} Work fulfilled.` : `Approved: ${m.text.replace(/^(For approval: )/, "")}`, min: 0 });
+    toast(work ? "Signed off. Work fulfilled." : "Approved and logged");
+    render();
+  });
+}
+
+function turnTo(s) {
+  if (s === side) return;
+  const target = -SIDES.indexOf(s) * 90;
+  let d = ((target - angle) % 360 + 540) % 360 - 180;
+  angle += d;
+  side = s;
+  $("ring").style.transform = `rotate(${angle}deg)`;
+  render();
+}
+
+
+/* Things the assistant can show in its answer: graphs, routed mail and calendar, toggles */
+const WEEKS = ["10-19", "10-26", "11-02", "11-09", "11-16"];
+const FOOD = [30.0, 30.0, 31.3, 32.7, 34.0], LABOR = [33.7, 34.0, 32.9, 36.2, 35.8];
+function chartSvg() {
+  const W = 360, H = 170, L = 34, R = 22, T = 12, B = 26, lo = 28, hi = 38;
+  const x = (i) => L + i * (W - L - R) / (WEEKS.length - 1), y = (v) => T + (hi - v) * (H - T - B) / (hi - lo);
+  const path = (a) => a.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join("");
+  let g = "";
+  for (const v of [28, 30, 32, 34, 36, 38]) g += `<line class="grid" x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}"/><text x="${L - 6}" y="${y(v) + 4}" text-anchor="end">${v}%</text>`;
+  WEEKS.forEach((w, i) => g += `<text x="${x(i)}" y="${H - 8}" text-anchor="middle">${w}</text>`);
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Food cost and labor percent of sales by week">${g}
+    <line class="tgt" x1="${L}" x2="${W - R}" y1="${y(32)}" y2="${y(32)}"/>
+    <path class="l1" d="${path(FOOD)}"/><path class="l2" d="${path(LABOR)}"/>
+    <circle cx="${x(4)}" cy="${y(FOOD[4])}" r="4" fill="var(--human)"/><circle cx="${x(4)}" cy="${y(LABOR[4])}" r="4" fill="var(--hiwr)"/></svg>
+    <div class="legend"><span style="--c:var(--human)">Food cost % (34.0 last week)</span><span style="--c:var(--hiwr)">Labor % (35.8)</span><span style="--c:var(--bad)">Food cost target 32%</span></div>`;
+}
+const INBOX = [
+  { kind: "mail", from: "Sysco credit dept", t: "Credit memo CM-2291 for $86.40", to: "Accounting", side: "accounting", why: "matches the Lowes/Sysco credit on file; Sue confirms", min: 2 },
+  { kind: "mail", from: "US Foods rep", t: "Week 48 order guide prices", to: "Inventory", side: "inventory", why: "from your approved US Foods source; Human re-checks vendor prices", min: 2 },
+  { kind: "mail", from: "Rosa", t: "Can I swap Friday for Sunday?", to: "Staff", side: "staff", why: "becomes an HR request for Marco", min: 1 },
+  { kind: "calendar", from: "County health dept", t: "Inspection Thu 11-26, 2:00 PM", to: "Scheduling", side: "scheduling", why: "added as a deadline; prep checklist goes to Marco", min: 1 },
+  { kind: "calendar", from: "Event booking", t: "Party of 12, Fri 7:30 PM", to: "Scheduling", side: "scheduling", why: "staffing for Friday re-checked: one more server needed", min: 1 },
+];
+function inboxHtml() {
+  const items = INBOX.filter((m) => role() >= m.min);
+  if (!items.length) return "Mail and calendar routing is for leads and managers. Your own shifts are under Staff.";
+  return `<div class="mail">${items.map((m) => `<div class="item" style="--edge:${m.kind === "mail" ? "var(--hiwr)" : "var(--human)"}">
+    <div class="top"><h3>${m.t}</h3><span class="chip">${m.kind === "mail" ? "Mail" : "Calendar"}</span></div>
+    <p>From ${m.from} → <b style="color:var(--fg)">${m.to}</b>: ${m.why}</p></div>`).join("")}</div>`;
+}
+const TOGGLES = [
+  { id: "t1", t: "Confirm routine entries automatically", d: "POS sales, timeclock and known payees under $1,500. Owner only.", on: true, min: 4 },
+  { id: "t2", t: "Text available staff when a shift opens", d: "Only people who opted in to texts.", on: false, min: 2 },
+  { id: "t3", t: "Remind me before order cut-offs", d: "One hour before each vendor's cut-off.", on: true, min: 1 },
+  { id: "t4", t: "Read answers aloud", d: "Human speaks its replies on this device.", on: false, min: 0 },
+];
+function togglesHtml() {
+  return TOGGLES.map((t) => `<div class="toggle"><div><b>${t.t}</b><p>${t.d}</p></div>
+    <button class="switch" role="switch" aria-checked="${t.on}" aria-label="${t.t}" data-tg="${t.id}" ${role() < t.min ? "disabled" : ""}></button></div>`).join("");
+}
+function wireToggles() {
+  document.querySelectorAll("[data-tg]").forEach((b) => b.onclick = () => {
+    const t = TOGGLES.find((x) => x.id === b.dataset.tg); t.on = !t.on;
+    b.setAttribute("aria-checked", t.on); toast(`${t.t}: ${t.on ? "on" : "off"}`);
+  });
+}
+/* Voice / chat: answers questions or runs commands in the app (sample: a few phrasings) */
+const COMMANDS = [
+  { re: /(go to|open|show|turn to)\s+(accounting|inventory|staff|scheduling)/i, run: (m) => { turnTo(m[2].toLowerCase()); dir = "out"; render(); return `Opened ${NAMES[m[2].toLowerCase()]}.`; } },
+  { re: /what('?s| is) waiting|what needs/i, run: () => SIDES.map((s) => `${NAMES[s]}: ${role() < DATA[s].seeOut ? "in only" : waiting(s)}`).join(" · ") },
+  { re: /send .*sysco|approve .*sysco/i, run: () => { if (role() < 2) return "Sending an order needs a manager. I put it in the approvals chat for Marco."; act("i1", "approved"); return "Approved the Sysco order ($969.08). It goes to Sysco from Ordering."; } },
+  { re: /dishwasher|cover tonight/i, run: () => { turnTo("staff"); dir = "out"; render(); return role() >= 1 ? "Three certified dishwashers are free tonight. Send the offer from Staff when you're ready." : "I let Marco know the dish station is short."; } },
+  { re: /food cost|margin/i, run: () => role() >= 2 ? "Food cost is 33.1%, above your 32% target. Harbor Seafood moved the most. Details under Accounting." : "That's for managers. I can show your tasks." },
+  { re: /graph|chart|trend/i, run: () => role() >= 2 ? "Food cost and labor, week by week:" + chartSvg() : "Charts of costs are for managers. Ask me for your shifts instead." },
+  { re: /mail|inbox|email|calendar|events?/i, run: () => "Here's what came in and where I sent it:" + inboxHtml() },
+  { re: /toggle|settings|turn (on|off)|switch/i, run: () => "Actions you can switch on or off:" + togglesHtml() },
+  { re: /deadline|due/i, run: () => { turnTo("scheduling"); dir = "out"; schedTab = "dl"; render(); return "Next: Sysco order cut-off today 4:00 PM."; } },
+];
+$("ask").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const q = $("q").value.trim(); if (!q) return;
+  const c = COMMANDS.find((c) => c.re.test(q));
+  const ans = c ? c.run(q.match(c.re)) : "In this sample I know a few things: what's waiting, open a side, send the Sysco order, cover tonight, food cost, a cost graph, mail and calendar, toggles, deadlines.";
+  $("answer").innerHTML = `<div class="reply"><span class="q">You: ${q.replace(/[<>&]/g, "")}</span><div>${ans}</div></div>`;
+  wireToggles();
+  $("q").value = "";
+});
+function suggestions() {
+  $("answer").innerHTML = `<div class="suggest">${["What's waiting?", "Show the cost graph", "Check mail and calendar", "Toggles", "Send the Sysco order", "Find a dishwasher for tonight"]
+    .map((t) => `<button type="button">${t}</button>`).join("")}</div>`;
+  $("answer").querySelectorAll("button").forEach((b) => b.onclick = () => { $("q").value = b.textContent; $("ask").requestSubmit(); });
+}
+$("mic").onclick = () => {
+  const on = $("mic").getAttribute("aria-pressed") !== "true";
+  $("mic").setAttribute("aria-pressed", on);
+  $("q").placeholder = on ? "Listening… (sample: type instead)" : "Ask, or tell Human what to do";
+};
+
+$("c-in").onclick = () => { dir = "in"; render(); };
+$("c-out").onclick = () => { dir = "out"; render(); };
+$("role").onchange = render;
+let x0 = null;
+$("dial").addEventListener("pointerdown", (e) => { x0 = e.clientX; });
+$("dial").addEventListener("pointerup", (e) => {
+  if (x0 !== null && Math.abs(e.clientX - x0) > 40) {
+    const i = SIDES.indexOf(side) + (e.clientX < x0 ? 1 : -1);
+    turnTo(SIDES[(i + 4) % 4]);
+  }
+  x0 = null;
+});
+
+let tt;
+function toast(msg) {
+  document.querySelectorAll(".toast").forEach((t) => t.remove());
+  const t = document.createElement("div"); t.className = "toast"; t.textContent = msg; document.body.appendChild(t);
+  clearTimeout(tt); tt = setTimeout(() => t.remove(), 2200);
+}
+$("ring").style.transform = `rotate(${angle}deg)`;
+render();
+suggestions();
+</script>

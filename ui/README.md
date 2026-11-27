@@ -97,6 +97,11 @@ and did it do what you meant. Money cards are marked "PENDING - requires double 
   messages) stays as written for now.
 - Each member's default language comes from their record (Rosa opens in Spanish).
 
+## Samples
+
+- `samples/menu-dial.html`: a standalone mock of the main menu as a dial. Open it in a browser; it has no
+  connection to the server yet and isn't wired into `web/`.
+
 ## Not done yet
 
 - Real sign-in. The member picker in the top bar is a sample switcher (it sends `X-Member`).

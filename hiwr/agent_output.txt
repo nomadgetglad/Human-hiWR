@@ -1,0 +1,56 @@
+1. PIONEERING PHASE
+   Turn Human on before setup is done: BLOCKED: pioneering isn't done yet: add items and ring a first order, or connect your POS
+   after items + 3 hand-entered days: keep recording sales: 3/14 days, 0/2 full weeks
+   Square export preview: 21 days, 84 lines, 42 problems, e.g. row 5: category 'Drinks' has no department; map it before importing
+   import after fixing the mapping: {'posted': 36, 'skipped_duplicates': 6, 'item_lines': 126}
+   status: 21 sale days, 2 full weeks, done=True
+   Human is now stage 1: Bookkeeper
+
+2. STAGE 1 BOOKKEEPER: Human proposes, Sue confirms everything
+   Sue confirmed 471 entries
+   Skip to stage 3: BLOCKED: stage 3 comes after Human has run as the accounting agent
+   Human is now stage 2: Accounting agent
+
+3. STAGE 2 ACCOUNTING AGENT: routine entries confirmed on its own
+   {'auto_confirmed': 222, 'left_for_people': 2, 'audit_samples': 25}
+   left for Sue: #695 Restaurant Depot $234.12 (no rule matches; a person picks the class)
+   left for Sue: #681 NCDOR $4,000.00 (matched 'ncdor')
+   audit: #550 ok
+   audit: #565 corrected to supplies; Ecolab goes back to manual review
+   Ecolab's next charge: left for a person
+Tax records 2026-11-01 to 2026-11-22
+   sales tax: collected $3,681.42 this period, paid $4,000.00; balance owed as of 2026-11-22: $6,277.13
+   employer payroll tax: accrued $1,747.03 this period, paid $1,650.00; balance owed as of 2026-11-22: -$55.21
+   Employee withholding sits with the payroll provider. Filing due dates follow your schedule; confirm with the accountant.
+
+4. INVENTORY ORDER UPDATES
+   11-20 15:10  Harbor Seafood confirmed PO #1: delivery Sat 7-9 AM
+   11-22 06:05  PO #1 is on the truck, ETA 7:40 AM
+   11-22 07:52  white fish came in short by 160
+   11-22 07:52  white fish billed above the PO price (58.5 vs 55.0 c/unit)
+   11-22 07:52  Opened SHP-0001 for the shorts and price differences; credit is pending, not booked
+   11-22 07:52  PO #1 received
+
+5. VENDOR PRICES FROM APPROVED SOURCES ONLY
+   BLOCKED: cheap-wholesale.biz is not an approved price source; the account holder approves sources
+   BLOCKED: http://shop.sysco.com/order-guide: prices are only taken over https
+   4 prices from Sysco (account_export)
+   2 prices from US Foods (account_export)
+   2 prices from Harbor Seafood (catalog_file)
+   suggestion #1: white fish: Harbor Seafood 56.9c/unit vs Sysco 49.4c/unit (10 lb case, 2-day lead), about $97.50/week at current use. Check quality and delivery days before switching
+   suggestion #2: roma tomato: Sysco 9.5c/unit vs US Foods 8.0c/unit (25 lb case, 3-day lead), about $7.35/week at current use. Check quality and delivery days before switching
+   (shrimp is cheaper at Harbor Seafood, but Harbor has an open SHIPMENT ticket, so it isn't suggested yet)
+   cook_luis accepts one: BLOCKED: switching vendors needs Manager level (2)
+   white fish: switched to Sysco (chef_marco)
+
+6. STAGE 3 TASK LIST AGENT
+   BLOCKED: Human is stage 2 (Accounting agent); task lists start at stage 3
+   Human is now stage 3: Task list agent
+   accounting_sue's day:
+      [task] [Human] Classify 1 entry Human couldn't settle ($234.12)
+      [task] [Human] Check 23 audit samples of what Human confirmed on its own
+   chef_marco's day:
+      [analysis] [Human] Margin plan 11-16..11-22: labor: recover $425.36, hours to move 25.1  (goal: recover $425.36 next sample)
+      [call] [Human] Vendor price check: roma tomato: Sysco 9.5c/unit vs US Foods 8.0c/unit (25 lb case, 3-day lead), about $7.35/week at current use. Check quality and delivery days before switching
+      [call] [Human] Call the vendor about SHP-0001 and confirm the credit
+   Human tries to send a PO or move money: not in its tools at any stage.

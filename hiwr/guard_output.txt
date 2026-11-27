@@ -1,0 +1,60 @@
+1. SECURITY PATROL (Sunday night, 11-22)
+   Luis types the right PIN at 23:50 from the kitchen: refused (locked 15 min)
+   ...and again at 00:05: let in
+Security patrol 02:10: 4 high, 2 medium, 1 low, 1 info.
+   #6 [high] 23:34 chef_marco opened 26 different client records within 10 min. Normal work opens a few at a time
+   #1 [high] 23:44 7 failed sign-ins on cook_luis's account within 10 min from 185.220.101.0/24, 73.12.40.0/24. Locked for 15 min automatically.
+   #2 [high] 23:47 Network 185.220.101.0/24 failed sign-ins on 3 accounts (chef_marco, cook_luis, host_ana). Someone may be trying common PINs.
+   #4 [high] 02:05 accounting_sue (level 3) signed in from a device not used in 30 days, network 98.21.7.0/24. Ask them if it was them; this account can see payroll and money approvals
+   #7 [medium] 23:20 host_ana was refused 3 times (payroll,order_costs,client_records). Could be a wrong button or someone looking where they shouldn't
+   #5 [medium] 02:05 accounting_sue signed in at 02:05; usual hours are 8:00 to 18:00
+   #3 [low] 00:05 cook_luis signed in at 00:05; usual hours are 14:00 to 23:00
+   #8 [info] 23:58 owner_alex set host_ana to level 1
+   Owner closes #4: it was Sue's new laptop
+   Marco tries to close an alert: BLOCKED: security alerts are decided by the account holder
+   Erasing sign-in history: signin_events is append-only
+
+2. DATA KEEPER (synchronized and organized)
+   [high] 2026-11-22: item sales exist but no sales posted to the books
+         fix: re-run the POS import for that day
+   [medium] Maria Lopez / M. Lopez share +19105550101 (records 27,28)
+         fix: merge into the oldest record, keeping both histories (merge_contacts 27,28)
+   [medium] 2026-11-20: no sales recorded at all (not a Sunday)
+         fix: enter the Z-report, or mark the day closed
+   [medium] PO #1 Pine St Bakery received 2026-11-20, no invoice on the record
+         fix: snap the invoice on HiWR In, or ask the vendor for it
+   [medium] SHP-0001 expects a credit of $88.00, open 21 days
+         fix: call the vendor (task to the manager)
+   [medium] corn tortilla shows -120 each
+         fix: count it; a delivery is probably missing
+   [low] #4 Lowes $212.18 from 2026-11-05 still not confirmed
+         fix: goes on Finance's task list
+   [low] #5 Sysco $640.00 from 2026-11-12 still not confirmed
+         fix: goes on Finance's task list
+   [low] #6 SYSCO INC $580.00 from 2026-11-14 still not confirmed
+         fix: goes on Finance's task list
+   [low] one vendor under 2 names: SYSCO INC, Sysco
+         fix: pick one name; HiWR adds a rule so new entries use it
+   Sue approves the merge; both histories are kept. Re-run: 0 duplicate findings open
+
+3. INVENTORY FOR THIS WEEKEND: PICK A MINDSET (Fri-Sat, party of 12 and the yacht club catering included)
+                               Stable    Lean (risky)          Growth
+   expected sales              $8,445          $7,706          $9,794
+   main ingredient               $990            $911          $1,147
+   expected waste                $129             $34            $160
+   sales - food - waste          $7,326          $6,761          $8,486
+   cash to order                 $644            $494            $786
+   worst run-out        Fish taco 16%      Burger 61%   Tomato sa 10%
+   (main ingredient cost only; growth sales assume the push brings 15% more guests)
+   Stable: Fish tacos 280 (runs out 16%); Burger 220 (runs out 16%); Tomato salad 105 (runs out 16%); Margarita 185 (runs out 16%)
+   Lean (risky): Fish tacos 230 (runs out 60%); Burger 182 (runs out 61%); Tomato salad 74 (runs out 59%); Margarita 141 (runs out 60%)
+   Growth: Fish tacos 328 (runs out 10%); Burger 258 (runs out 9%); Tomato salad 124 (runs out 10%); Margarita 218 (runs out 10%)
+
+   Owner picks Stable. Human's tasks go out in the owner's name:
+      [Human, stable plan] Order 1,100 oz white fish for 280 Fish tacos
+      [Human, stable plan] Prep for 280 Fish tacos
+      [Human, stable plan] Prep for 220 Burger
+      [Human, stable plan] Prep for 105 Tomato salad
+      [Human, stable plan] Order 198 each lime for 185 Margarita
+      [Human, stable plan] Prep for 185 Margarita
+   OK

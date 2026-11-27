@@ -112,7 +112,8 @@ def add_phone(db, contact_id, raw, actor, label="mobile", primary=False):
 def merge_contacts(db, keep_id, dup_id, actor):
     """Point the duplicate at the kept record and move its links. Nothing is deleted."""
     for table in ("contact_phones", "appointments", "shipments", "orders"):
-        db.execute(f"UPDATE {table} SET contact_id=? WHERE contact_id=?", (keep_id, dup_id))
+        # OR IGNORE: a phone both records already share stays on the duplicate row, which is marked merged below
+        db.execute(f"UPDATE OR IGNORE {table} SET contact_id=? WHERE contact_id=?", (keep_id, dup_id))
     db.execute("UPDATE contacts SET merged_into=? WHERE id=?", (keep_id, dup_id))
     _event(db, keep_id, actor, "merged", {"from": dup_id})
     _event(db, dup_id, actor, "merged_into", {"into": keep_id})

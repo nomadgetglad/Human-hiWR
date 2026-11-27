@@ -24,10 +24,13 @@ CLASSES = {
     "insurance": ("Operating", "shared"), "marketing": ("Operating", "shared"),
     "equipment_purchase": ("Capital", "shared"),     # not a P&L expense; the accountant decides depreciation
     "owner_draw": ("Balance sheet", None), "loan_principal": ("Balance sheet", None),
+    "sales_tax_collected": ("Balance sheet", None),   # owed to the state, never revenue
+    "tax_payment": ("Balance sheet", None),           # deposit paying tax already counted (accrued) or collected
 }
 PL_GROUPS = ("Revenue", "Contra revenue", "COGS", "Labor", "Occupancy", "Operating")
 
 KEYWORDS = [  # (words in counterparty/description, class) - first match wins
+    (("eftps", "ncdor", "dept of revenue", "sales tax payment"), "tax_payment"),
     (("sysco", "us foods", "produce", "seafood", "bakery", "meat"), "food_cost"),
     (("beverage", "beer", "wine", "liquor", "coca-cola", "pepsi"), "beverage_cost"),
     (("to-go", "clamshell", "packaging", "webstaurant"), "packaging"),
@@ -41,7 +44,7 @@ KEYWORDS = [  # (words in counterparty/description, class) - first match wins
     (("payroll tax", "irs", "ncdor", "futa", "suta"), "payroll_tax"),
     (("cleaning", "chemicals", "ecolab", "paper"), "supplies"),
 ]
-SOURCE_CLASS = {"payroll": "wages", "timeclock": "wages", "timeclock_tax": "payroll_tax"}
+SOURCE_CLASS = {"payroll": "wages", "timeclock": "wages", "timeclock_tax": "payroll_tax", "pos_tax": "sales_tax_collected"}
 CAPITAL_HINTS = ("new ", "purchase", "replace", "install", "compressor", "oven", "fryer unit")
 CAPITAL_MIN_CENTS = 2500_00
 DEFAULT_TARGETS = {  # common full-service rules of thumb; the owner should set their own
@@ -208,10 +211,31 @@ def _pct(a, b):
     return round(100 * a / b, 1) if b else None
 
 
-def numbers(db, start, end):
+FIXED_MONTHLY = ("rent", "utilities", "insurance")
+
+
+def _prorated_fixed(db, start, end):
+    """Monthly bills spread by day, so a one-week sample carries a week's share of rent, not all or none of it."""
+    out, s, e = {}, date.fromisoformat(start), date.fromisoformat(end)
+    m = s.replace(day=1)
+    while m <= e:
+        nxt = (m.replace(day=28) + timedelta(days=4)).replace(day=1)
+        overlap = (min(e, nxt - timedelta(days=1)) - max(s, m)).days + 1
+        for t, ev in _rows(db, m.isoformat(), (nxt - timedelta(days=1)).isoformat()):
+            if ev["status"] == "confirmed" and ev["class"] in FIXED_MONTHLY:
+                out[ev["class"]] = out.get(ev["class"], 0) + round(t["amount_cents"] * overlap / (nxt - m).days)
+        m = nxt
+    return out
+
+
+def numbers(db, start, end, prorate_fixed=False):
     by_class, by_group, unconfirmed, dept = {}, {g: 0 for g in CLASSES_GROUPS()}, [0, 0], {}
+    if prorate_fixed:
+        for c, v in _prorated_fixed(db, start, end).items():
+            by_class[c] = v
+            by_group[CLASSES[c][0]] += v
     for t, e in _rows(db, start, end):
-        if e["status"] == "excluded":
+        if e["status"] == "excluded" or (prorate_fixed and e["class"] in FIXED_MONTHLY and e["status"] == "confirmed"):
             continue
         if e["status"] != "confirmed":
             unconfirmed[0] += 1

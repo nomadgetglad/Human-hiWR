@@ -60,6 +60,14 @@ the saved outputs after you change a module on purpose.
 | `hiwr_factory.py` | Factory line (pipe plant): owner-written SOPs as the AI's only source, per-unit check-throughs, quotas, rotation by station certs, foreman board and HR roll call | `factory_demo.py` |
 | `hiwr_signing.py` | Prototype: signed money approvals (Ed25519 keys on the approver's device, registered by the account holder) in a hash chain, so a forged, replayed or edited approval fails `verified_status()`. Needs the `cryptography` package. See `../APPROVALS_SECURITY.md` | `../tests/test_signing.py` |
 | `hiwr_pharmacy.py` | Prescription order status only (no drug names stored), pharmacist verify as a certified task, holds, return to stock after 10 days | `pharmacy_demo.py` |
+| `hiwr_contract.py` | The shared contract between HiWR (data: measured quantities) and Human (AI: options and the quantities each needs). Both sides build against the same version; Human refuses a snapshot from another version | used by the margin and agent demos |
+| `hiwr_margins.py` | HiWR side of margins: sample-to-sample quantities over any window of days, monthly bills spread by day so different lengths compare fairly | `margin_demo.py` |
+| `human_margins.py` | Human side of margins: reads only the HiWR snapshot and returns options to hold margin with the quantities each needs, cheapest to the guest first, price last | `margin_demo.py` |
+| `hiwr_pioneer.py` | Pioneering phase, the first setup of a business: enter what you sell and ring a first order, enter daily register totals by hand, or both, before Human has anything to learn from | `agent_demo.py` |
+| `human_agent.py` | Human grown in stages: pioneer (records only), bookkeeper (proposes, Finance confirms), accounting agent (confirms routine entries), task list agent; plus inventory order updates and vendor suggestions from approved price sources | `agent_demo.py` |
+| `hiwr_security.py` | Security patrol over sign-ins and database reads, using metadata only (who, when, hashed device, network cut to /24). Code detects with fixed rules; Human writes the alert in plain words for the account holder | `guard_demo.py` |
+| `hiwr_datakeeper.py` | Data keeper: read-only checks that the databases agree and stay organized. Findings come with a proposed fix (correcting entry, merge or task) applied only after a yes | `guard_demo.py` |
+| `human_strategy.py` | Inventory plans under three mindsets the owner picks from: stable (rarely run out), lean (least cash and waste, accepts 86-ing), growth | `guard_demo.py` |
 
 Generated documents kept as examples: `supply_chain_brief.md`, `contract_dishwasher_temp.md`.
 
