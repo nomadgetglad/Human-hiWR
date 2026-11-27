@@ -20,7 +20,7 @@ export function TopBar({ me, go, right }: { me: Me; go: (s: string) => void; rig
     <header className={`topbar topbar-${bar?.role_view ?? "employee"}`}>
       <Button className="brand" onPress={() => go("home")} aria-label={t("Home")}>
         <img src="/icon.svg" alt="" width={36} height={36} />
-        <span>Human</span>
+        <span className="brand-name">Human</span>
       </Button>
       <div className="stats" aria-live="polite">
         {bar?.stats.map((s) => (
@@ -67,7 +67,16 @@ export function TopBar({ me, go, right }: { me: Me; go: (s: string) => void; rig
           </Dialog>
         </Popover>
       </DialogTrigger>
-      {right}
+      <DialogTrigger>
+        <Button className="me-btn" aria-label={`${t("Signed in as")} ${me.name}`}>
+          {me.name.slice(0, 1)}
+        </Button>
+        <Popover className="popover" placement="bottom end">
+          <Dialog className="notes me-sheet" aria-label={t("Signed in as")}>
+            {right}
+          </Dialog>
+        </Popover>
+      </DialogTrigger>
     </header>
   );
 }
