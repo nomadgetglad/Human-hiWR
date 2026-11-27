@@ -1235,3 +1235,17 @@ CREATE TRIGGER IF NOT EXISTS id_records_no_update BEFORE UPDATE ON id_records BE
 CREATE TRIGGER IF NOT EXISTS id_records_no_delete BEFORE DELETE ON id_records BEGIN SELECT RAISE(ABORT, 'id_records is append-only'); END;
 CREATE TRIGGER IF NOT EXISTS id_access_log_no_update BEFORE UPDATE ON id_access_log BEGIN SELECT RAISE(ABORT, 'id_access_log is append-only'); END;
 CREATE TRIGGER IF NOT EXISTS id_access_log_no_delete BEFORE DELETE ON id_access_log BEGIN SELECT RAISE(ABORT, 'id_access_log is append-only'); END;
+
+-- House job titles: words only this business uses ("pit boss" = the grill cook) mapped to a schedule role.
+-- Added or retired by a Manager or above (hiwr_roles.py). A title never sets an access level or pay.
+CREATE TABLE IF NOT EXISTS role_title_events (
+    id          INTEGER PRIMARY KEY,
+    at          TEXT NOT NULL DEFAULT (datetime('now')),
+    title_norm  TEXT NOT NULL,
+    title       TEXT NOT NULL,
+    role        TEXT NOT NULL,
+    action      TEXT NOT NULL CHECK (action IN ('add', 'retire')),
+    actor       TEXT NOT NULL
+);
+CREATE TRIGGER IF NOT EXISTS role_title_events_no_update BEFORE UPDATE ON role_title_events BEGIN SELECT RAISE(ABORT, 'role_title_events is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS role_title_events_no_delete BEFORE DELETE ON role_title_events BEGIN SELECT RAISE(ABORT, 'role_title_events is append-only'); END;

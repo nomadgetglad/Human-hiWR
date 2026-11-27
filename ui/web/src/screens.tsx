@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button, Input, Label, ListBox, ListBoxItem, Popover, Select, SelectValue, Tab, TabList, TabPanel, Tabs, TextField } from "react-aria-components";
 import { api, usd, type Me } from "./api";
 import { useProposals } from "./ConfirmCard";
@@ -50,7 +50,7 @@ const LEVELS = ["Staff", "Lead", "Manager", "Finance"];
 export function Team() {
   const t = useT();
   const { propose } = useProposals();
-  const v = useData<{ members: any[]; can_set_level: boolean; can_set_pay: boolean; can_view_id: boolean; roles: string[]; doc_types: Record<string, string> }>("/api/team");
+  const v = useData<{ members: any[]; can_set_level: boolean; can_set_pay: boolean; can_view_id: boolean; roles: string[]; role_labels: Record<string, string>; house_titles: { title: string; role: string; label: string }[]; all_roles: { role: string; label: string }[]; doc_types: Record<string, string> }>("/api/team");
   const [idFor, setIdFor] = useState<{ id: string; name: string; view: boolean } | null>(null);
   const [first, setFirst] = useState("");
   const [title, setTitle] = useState("");
@@ -58,7 +58,12 @@ export function Team() {
   const [lvl, setLvl] = useState("0");
   const [role, setRole] = useState("none");
   const [rate, setRate] = useState("");
+  const reads = useRoleMatch(title);
+  const [houseTitle, setHouseTitle] = useState("");
+  const [houseRole, setHouseRole] = useState("cook");
   if (!v) return <p className="muted">{t("The team roster needs Manager level.")}</p>;
+  const roleName = (r: string) => v.role_labels[r] ?? v.all_roles.find((x) => x.role === r)?.label ?? r;
+  const scheduleRoles = reads?.role && !v.roles.includes(reads.role) ? [...v.roles, reads.role] : v.roles;
   const add = () => {
     const params: Record<string, any> = { first_name: first, title, language, level: Number(lvl) };
     if (v.can_set_pay && role !== "none") {
@@ -94,7 +99,7 @@ export function Team() {
           {v.can_set_level && <Pick label={t("Level")} value={lvl} onChange={setLvl} options={LEVELS.map((n, i) => [String(i), `${i} ${t(n)}`])} />}
           {v.can_set_pay && (
             <>
-              <Pick label={t("Schedule role")} value={role} onChange={setRole} options={[["none", t("Not on the schedule")], ...v.roles.map((r) => [r, r])]} />
+              <Pick label={t("Schedule role")} value={role} onChange={setRole} options={[["none", t("Not on the schedule")], ...scheduleRoles.map((r) => [r, roleName(r)])]} />
               {role !== "none" && (
                 <TextField className="field" value={rate} onChange={setRate} inputMode="decimal">
                   <Label>{t("Pay ($/hour)")}</Label>
@@ -104,6 +109,33 @@ export function Team() {
             </>
           )}
           <Button className="btn btn-primary" onPress={add} isDisabled={!first.trim() || !title.trim()}>
+            {t("Add")}
+          </Button>
+        </div>
+        {title.trim() && reads && <RoleHint reads={reads} canUse={v.can_set_pay && role !== reads.role} onUse={() => reads.role && setRole(reads.role)} />}
+      </div>
+      <div className="panel">
+        <h2 className="h2">{t("House job titles")}</h2>
+        <p className="muted small">{t("Words only your business uses, like \"pit boss\" for the grill cook. A title never changes a level or pay.")}</p>
+        {v.house_titles.length > 0 && (
+          <ul className="list">
+            {v.house_titles.map((h) => (
+              <li key={h.title}>
+                <b>{h.title}</b> = {h.label}{" "}
+                <Button className="btn btn-ghost btn-sm" onPress={() => propose("house_title", { title: h.title, retire: true })}>
+                  {t("Stop using")}
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="form-row">
+          <TextField className="field" value={houseTitle} onChange={setHouseTitle}>
+            <Label>{t("House title")}</Label>
+            <Input autoComplete="off" placeholder="Pit boss" />
+          </TextField>
+          <Pick label={t("Means")} value={houseRole} onChange={setHouseRole} options={v.all_roles.map((r) => [r.role, r.label])} />
+          <Button className="btn" onPress={() => propose("house_title", { title: houseTitle, role: houseRole })} isDisabled={!houseTitle.trim()}>
             {t("Add")}
           </Button>
         </div>
@@ -146,7 +178,7 @@ export function Team() {
                     </span>
                   </td>
                   <td>{m.language.toUpperCase()}</td>
-                  <td className="cap">{m.role ?? "—"}</td>
+                  <td className="cap">{m.role ? roleName(m.role) : "—"}</td>
                   {v.can_set_pay && <td>{m.hourly_cents ? `${usd(m.hourly_cents)}/h` : "—"}</td>}
                   <td>
                     <span className={`badge ${m.sign_in.enrolled ? "badge-ok" : ""}`}>
@@ -187,6 +219,71 @@ export function Team() {
         </div>
       </div>
     </section>
+  );
+}
+
+type RoleReads = {
+  role: string | null;
+  label: string | null;
+  how: string | null;
+  seniority: string[];
+  schedule: string[];
+  also: { role: string; label: string }[];
+  suggestions: { role: string; label: string }[];
+  about: { duties: string[]; skills: string[]; usual_certs: string[] } | null;
+};
+
+// What a typed job title means: the role it belongs to, duties, usual certs. Words only, never pay or level.
+function useRoleMatch(title: string) {
+  const [reads, setReads] = useState<RoleReads | null>(null);
+  useEffect(() => {
+    const q = title.trim();
+    if (!q) return setReads(null);
+    let live = true;
+    const id = setTimeout(() => {
+      api<RoleReads>(`/api/roles/match?title=${encodeURIComponent(q)}`)
+        .then((r) => live && setReads(r))
+        .catch(() => live && setReads(null));
+    }, 250);
+    return () => {
+      live = false;
+      clearTimeout(id);
+    };
+  }, [title]);
+  return reads;
+}
+
+function RoleHint({ reads, canUse, onUse }: { reads: RoleReads; canUse: boolean; onUse: () => void }) {
+  const t = useT();
+  if (!reads.role) {
+    return (
+      <p className="muted small">
+        {reads.suggestions.length
+          ? `${t("Did you mean")}: ${reads.suggestions.map((s) => s.label).join(", ")}?`
+          : t("New title. It's kept as typed; a manager can add it as a house title.")}
+      </p>
+    );
+  }
+  const tags = [...reads.seniority, ...reads.schedule].map((x) => t(x));
+  return (
+    <div className="muted small">
+      <p>
+        {t("Reads as")} <b>{reads.label}</b>
+        {tags.length > 0 && ` · ${tags.join(", ")}`}
+        {reads.also.length > 0 && ` · ${t("also")} ${reads.also.map((a) => a.label).join(", ")}`}
+        {canUse && (
+          <Button className="btn btn-ghost btn-sm" onPress={onUse}>
+            {t("Use for the schedule")}
+          </Button>
+        )}
+      </p>
+      {reads.about && (
+        <p>
+          {reads.about.duties.join(" · ")}
+          {reads.about.usual_certs.length > 0 && ` · ${t("Usual certs")}: ${reads.about.usual_certs.join(", ")}`}
+        </p>
+      )}
+    </div>
   );
 }
 

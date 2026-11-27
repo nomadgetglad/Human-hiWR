@@ -4,7 +4,8 @@ every hire decision to a person.
 Ranking uses only job-related facts:
   certifications  - required ones must be current on the start date; unverified ones are flagged
   availability    - share of the gap shifts the candidate can cover
-  experience      - months in the same role
+  experience      - months in the same role under any title for it (line cook, cook II, cocinero),
+                    plus related roles in part (hiwr_roles.py says how much)
   work style      - the candidate's own answers to questions about what the job involves
                     (fast pace, team work, customer facing, late nights). Not a personality test.
 Nothing about age, sex, race, religion, national origin, disability or family status is stored.
@@ -13,6 +14,7 @@ import json
 from datetime import datetime, timedelta
 from hiwr_contacts import _is_owner, request_money_action
 from hiwr_processes import open_ticket, ticket_priority
+from hiwr_roles import experience
 
 WEIGHTS = {"availability": 50, "experience": 30, "work_style": 20}
 
@@ -63,8 +65,7 @@ def rank_candidates(db, position_id, gaps, start_on):
         certs = {x: _cert_status(db, cid, x, start_on) for x in req + pref}
         blocking = [f"{x}: {certs[x]}" for x in req if certs[x] in ("missing",) or certs[x].startswith("expired")]
         flags += [f"verify {x} with issuer before start" for x in req + pref if certs[x] == "unverified"]
-        months = db.execute("SELECT COALESCE(SUM(months),0) FROM candidate_experience WHERE candidate_id=? AND role=?",
-                            (cid, pos["role"])).fetchone()[0]
+        months, how = experience(db, cid, pos["role"])
         if months < pos["min_experience_months"]:
             blocking.append(f"{months} months as {pos['role']} (needs {pos['min_experience_months']})")
         covered = [g for g in role_gaps if db.execute(
@@ -86,6 +87,7 @@ def rank_candidates(db, position_id, gaps, start_on):
         bonus = [x for x in pref if certs[x] in ("verified", "unverified")]
         reasons.append(f"covers {len(covered)}/{len(role_gaps)} open shifts")
         reasons.append(f"{months} months as {pos['role']}")
+        reasons += how
         reasons.append(f"work style matches {len(fit)}/{len(style)} job demands ({', '.join(fit) or 'none'})")
         if bonus:
             reasons.append("has preferred: " + ", ".join(bonus))

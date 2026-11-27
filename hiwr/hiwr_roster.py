@@ -12,6 +12,7 @@ import unicodedata
 
 from hiwr_access import level, set_level, LEVEL_NAMES
 from hiwr_contacts import _is_owner
+from hiwr_roles import role_for
 
 ADD_LEVEL = 2                 # Manager and up add people
 PAY_LEVEL = 3                 # Finance and up set pay (payroll data)
@@ -61,6 +62,8 @@ def check_new_member(db, first_name, title, added_by, language="en", lvl=0, role
     if lvl > 0 and not _is_owner(db, added_by):
         raise PermissionError("Only the account holder gives a level above 0 (Staff)")
     role = " ".join((role or "").split()).lower() or None
+    if role:
+        role = role_for(role, db) or role     # "Line Cook" is saved as cook, so staffing rules find them
     if role or hourly_cents not in (None, "", 0):
         if adder_level < PAY_LEVEL:
             raise PermissionError(f"Pay is payroll data: putting someone on the schedule with a rate needs level "
