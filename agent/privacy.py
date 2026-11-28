@@ -13,7 +13,7 @@ from dataclasses import dataclass
 
 CARD = re.compile(r"(?<![\d-])(?:\d[ -]?){12,18}\d(?![\d-])")
 PHONE = re.compile(r"(?<![\w+])(?:\+?1[ .-]?)?(?:\(\d{3}\)|\d{3})[ .-]?\d{3}[ .-]?\d{4}(?!\d)")
-EMAIL = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
+EMAIL = re.compile(r"(?<![\w.+-])[\w.+-]+@[\w-]+\.[\w.-]+")   # starts only at a word edge: stays fast on "++++..."
 
 
 def _mask_card(m):

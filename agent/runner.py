@@ -85,7 +85,9 @@ class Agent:
                                  and self.cfg["hybrid"]["fall_back_to_local"])
                 if not can_fall_back:
                     raise
-                note = f"(The cloud model wasn't reachable, so this ran on the local model instead: {e})"
+                # the error text stays out of the reply (it can carry hosts and internals); it's in the server log
+                note = "(The cloud model wasn't reachable, so this ran on the local model instead.)"
+                print(f"cloud model unreachable, fell back to local: {e}")
         reply = privacy.scrub(reply, self.people)
         reply = self._approval_guard(reply)
         if note:
