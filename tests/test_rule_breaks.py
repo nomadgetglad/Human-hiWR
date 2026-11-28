@@ -316,13 +316,12 @@ def test_built_app_serves_the_page(built_app):
 
 
 @pytest.mark.parametrize("path", ["/%2e%2e/%2e%2e/human.key", "/..%2f..%2fhuman.key", "/%2e%2e%2f%2e%2e%2fhuman.key"])
-@bug("CRITICAL. The catch-all route that serves the web app (spa() in ui/server/app.py) joins the address onto "
-     "ui/web/dist without checking it stays inside. '/%2e%2e/%2e%2e/human.key' walks up two folders and downloads "
-     "the account key, with no sign-in. The same trick reads human.db (every record) and the server code. Checked "
-     "against a real uvicorn server with curl too. Fix: resolve the path and refuse anything outside dist.")
+# Was CRITICAL, fixed in this PR: spa() joined the address onto ui/web/dist without checking it stayed inside,
+# so '/%2e%2e/%2e%2e/human.key' downloaded the account key with no sign-in (checked with curl on a real server).
 def test_web_app_route_cannot_read_files_outside_dist(built_app, path):
     r = built_app.get(path)
     assert "THE-ACCOUNT-KEY" not in r.text
+    assert r.text == "<html>app</html>"
 
 
 @bug("Same hole as test_nobody_approves_their_own_time_off, through the app: Marco (Manager) opens an 'Approve time "
