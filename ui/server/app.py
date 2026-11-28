@@ -890,5 +890,7 @@ if DIST.exists():
 
     @app.get("/{path:path}")
     def spa(path: str):
-        f = DIST / path
-        return FileResponse(f if path and f.is_file() else DIST / "index.html")
+        # Only files inside dist. '/%2e%2e/%2e%2e/human.key' used to walk out and download the account key.
+        f = (DIST / path).resolve()
+        inside = f.is_relative_to(DIST.resolve())
+        return FileResponse(f if path and inside and f.is_file() else DIST / "index.html")
