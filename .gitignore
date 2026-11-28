@@ -3,3 +3,29 @@ __pycache__/
 *.db
 .pytest_cache/
 *.key
+
+# --- Secrets and local data: never commit these ---
+# Environment files hold API keys (Stripe, Anthropic). Only the example is shared.
+.env
+.env.*
+!.env.example
+# Keys and certificates (ui/human.key is already covered by *.key above)
+*.pem
+*.p12
+*.pfx
+*.crt
+id_rsa*
+id_ed25519*
+# Databases and their side files (employee data, W-2s, DMs)
+*.sqlite
+*.sqlite3
+*.db-journal
+*.db-wal
+*.db-shm
+# Local agent settings may hold keys or machine paths
+agent/config.local.toml
+# Editor and OS clutter
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
