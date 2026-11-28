@@ -1,0 +1,63 @@
+1. ONE SIGNED VECTOR, SUMMED (one day: + money in, - money out)
+   food_sales        $2,280.41
+   beverage_sales      $456.08
+   food_cost          -$729.73
+   wages              -$520.00
+   card_fees           -$73.88
+   sum = $1,412.88  ->  gross income $2,736.49, expenses $1,323.61, net $1,412.88
+   (adding the expenses as negatives gives the NET; gross is the top line before expenses)
+
+2. BY MONTH, FINANCE VIEW (accounting_sue)
+Income and expenses 2026-08-01 to 2026-11-27, by month (confirmed entries only, python vectors)
+                  gross income     refunds       expenses            net
+   2026-08         $100,764.66       $0.00    -$57,240.96     $43,523.70
+   2026-09          $98,541.90       $0.00    -$55,888.21     $42,653.69
+   2026-10         $103,476.66       $0.00    -$58,217.38     $45,259.28
+   2026-11          $83,620.59     -$48.00    -$49,766.37     $33,806.22
+   total           $386,403.81     -$48.00   -$221,112.92    $165,242.89
+   check: sum of the signed vector = $165,242.89 (same as net)
+   Not in net (capital / balance sheet): $3,400.00
+   Not counted yet: 1 entry, $212.18, waiting on a person
+   Anticipated, NOT in net (open tickets and money waiting on double approval):
+      SHP-0001         new                             -$186.00  -> anticipated costs
+      money action 2   PENDING - requires double approval (0/2)  -$4,125.75  -> expense
+      total anticipated costs           -$186.00
+      total expense                   -$4,125.75
+
+3. NOVEMBER BY WEEK AND BY CLASS
+   week of 2026-10-26  gross    $2,736.00  expenses   $11,233.47  net   -$8,497.47
+   week of 2026-11-02  gross   $21,901.75  expenses   $10,431.75  net   $11,470.00
+   week of 2026-11-09  gross   $21,925.85  expenses   $10,438.83  net   $11,487.02
+   week of 2026-11-16  gross   $21,949.97  expenses   $10,445.93  net   $11,456.04
+   week of 2026-11-23  gross   $15,107.02  expenses    $7,216.39  net    $7,890.63
+   beverage_sales     $13,936.68
+   card_fees          -$2,257.64
+   food_cost         -$22,298.73
+   food_sales         $69,683.91
+   refunds_comps         -$48.00
+   rent               -$8,500.00
+   utilities          -$1,410.00
+   wages             -$15,300.00
+
+4. CHECK AGAINST THE LEDGER (hiwr_accounting.numbers)
+   gross income  vectors   $83,620.59   ledger   $83,620.59   match
+   net sales     vectors   $83,572.59   ledger   $83,572.59   match
+   expenses      vectors   $49,766.37   ledger   $49,766.37   match
+   net           vectors   $33,806.22   ledger   $33,806.22   match
+
+5. STEW: DISH SALES x MENU PRICE AND PLATE COST, BESIDE THE BOOKS (no winner picked)
+   food_cost  books     $729.73  Stew     $773.64  gap    -$43.91  a manager decides which is right
+   food_sales books   $2,280.41  Stew   $3,528.00  gap -$1,247.59  a manager decides which is right
+   (Stew counts only fish tacos here; the POS total has the whole menu)
+
+6. LAB JOB: CONTRACT VS CREW TIME BY ROLE
+   contract          $410,000.00
+   crew_framer        -$1,068.75
+   crew_laborer         -$714.85
+   left after crew time    $408,216.40  (8.25 h x $17.33 rounds to the cent once)
+
+7. BUSINESS PULSE: NOVEMBER TO DATE VS THE 3 MONTHS BEFORE, BY WHO IS LOOKING
+   accounting_sue  Slow: 2026-11 through 2026-11-27 gross income $83,620.59, expenses $49,766.37, net $33,806.22 vs 3-month average $37,169.85 (-9.0%), same days 1-27 of each month (1 entry still waiting on a person)
+   chef_marco      Slow: 2026-11 through 2026-11-27 net margin 40.5% of net sales, -9.0% vs 3-month average (1 entry still waiting on a person)
+   cook_luis       Slow: 2026-11 through 2026-11-27
+   (month to date is compared with days 1-27 of Aug, Sep and Oct, not with whole months)
