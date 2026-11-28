@@ -1235,3 +1235,97 @@ CREATE TRIGGER IF NOT EXISTS id_records_no_update BEFORE UPDATE ON id_records BE
 CREATE TRIGGER IF NOT EXISTS id_records_no_delete BEFORE DELETE ON id_records BEGIN SELECT RAISE(ABORT, 'id_records is append-only'); END;
 CREATE TRIGGER IF NOT EXISTS id_access_log_no_update BEFORE UPDATE ON id_access_log BEGIN SELECT RAISE(ABORT, 'id_access_log is append-only'); END;
 CREATE TRIGGER IF NOT EXISTS id_access_log_no_delete BEFORE DELETE ON id_access_log BEGIN SELECT RAISE(ABORT, 'id_access_log is append-only'); END;
+
+-- ===================================================================
+-- Barcodes, lots and scans. Codes are exact keys: a GTIN is never matched by similarity.
+-- Every table here is append-only; the latest row wins where a fact changes.
+-- ===================================================================
+CREATE TABLE IF NOT EXISTS barcodes (                  -- one row per code at each pack level
+    gtin14       TEXT PRIMARY KEY,                     -- always 14 digits, check digit verified before insert
+    symbology    TEXT NOT NULL,                        -- upc_a, upc_e, ean13, ean8, itf14, house
+    item_kind    TEXT NOT NULL CHECK (item_kind IN ('product', 'material')),
+    item_ref     TEXT NOT NULL,                        -- products.sku or materials.material
+    pack_level   TEXT NOT NULL CHECK (pack_level IN ('each', 'inner', 'case', 'pallet')),
+    base_qty     REAL NOT NULL CHECK (base_qty > 0),   -- base units inside: 24 cans, 40 lb
+    base_unit    TEXT NOT NULL,                        -- each, lb, oz, qt, ft
+    source       TEXT NOT NULL,                        -- vendor, staff_scan, house
+    added_by     TEXT NOT NULL,
+    added_at     TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS barcode_confirmations (     -- a code a staff member taught HiWR counts only once confirmed
+    gtin14        TEXT NOT NULL REFERENCES barcodes(gtin14),
+    confirmed_by  TEXT NOT NULL,
+    at            TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS variable_measure_items (    -- store-set 2-prefix codes that carry a price or weight
+    item_code      TEXT PRIMARY KEY,                   -- the 5 digits after the 2
+    item_kind      TEXT NOT NULL CHECK (item_kind IN ('product', 'material')),
+    item_ref       TEXT NOT NULL,
+    embeds         TEXT NOT NULL CHECK (embeds IN ('price', 'weight')),
+    price_per_unit_cents INTEGER,                      -- needed to turn an embedded price back into weight
+    unit           TEXT NOT NULL DEFAULT 'lb'
+);
+CREATE TABLE IF NOT EXISTS lots (
+    id           INTEGER PRIMARY KEY,
+    item_kind    TEXT NOT NULL,
+    item_ref     TEXT NOT NULL,
+    lot_code     TEXT NOT NULL,                        -- GS1 AI 10, or a house batch id
+    expires_on   TEXT,                                 -- AI 17 (or AI 15 best-before when no 17)
+    packed_on    TEXT,                                 -- AI 13
+    vendor       TEXT,
+    received_at  TEXT NOT NULL,
+    UNIQUE (item_kind, item_ref, lot_code)
+);
+CREATE TABLE IF NOT EXISTS lot_events (                -- hold, release, recalled, discarded; latest wins
+    id        INTEGER PRIMARY KEY,
+    lot_id    INTEGER NOT NULL REFERENCES lots(id),
+    status    TEXT NOT NULL CHECK (status IN ('ok', 'on_hold', 'recalled', 'discarded')),
+    reason    TEXT,
+    member    TEXT NOT NULL,
+    at        TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS scan_log (                  -- every scan, kept even when it was rejected
+    id         INTEGER PRIMARY KEY,
+    raw        TEXT NOT NULL,
+    gtin14     TEXT,
+    item_kind  TEXT,
+    item_ref   TEXT,
+    base_qty   REAL,
+    base_unit  TEXT,
+    lot_id     INTEGER REFERENCES lots(id),
+    purpose    TEXT NOT NULL,                          -- receive, pull, count, sale, lookup
+    result     TEXT NOT NULL,                          -- ok, bad_check_digit, unknown_code, unconfirmed_code, needs_lot
+    member     TEXT NOT NULL,
+    at         TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS inventory_proposals (       -- reorder / stockout / duplicate-item proposals; a person decides
+    id         INTEGER PRIMARY KEY,
+    kind       TEXT NOT NULL,                          -- reorder, expiry_risk, possible_duplicate, unknown_code_match
+    item_ref   TEXT NOT NULL,
+    detail     TEXT NOT NULL,                          -- JSON: the numbers behind it
+    made_at    TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS inventory_proposal_decisions (
+    proposal_id INTEGER NOT NULL REFERENCES inventory_proposals(id),
+    decision    TEXT NOT NULL CHECK (decision IN ('accepted', 'rejected')),
+    member      TEXT NOT NULL,
+    at          TEXT NOT NULL
+);
+CREATE TRIGGER IF NOT EXISTS barcodes_no_update BEFORE UPDATE ON barcodes BEGIN SELECT RAISE(ABORT, 'barcodes is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS barcodes_no_delete BEFORE DELETE ON barcodes BEGIN SELECT RAISE(ABORT, 'barcodes is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS barcode_confirmations_no_update BEFORE UPDATE ON barcode_confirmations BEGIN SELECT RAISE(ABORT, 'barcode_confirmations is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS barcode_confirmations_no_delete BEFORE DELETE ON barcode_confirmations BEGIN SELECT RAISE(ABORT, 'barcode_confirmations is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS variable_measure_items_no_update BEFORE UPDATE ON variable_measure_items BEGIN SELECT RAISE(ABORT, 'variable_measure_items is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS variable_measure_items_no_delete BEFORE DELETE ON variable_measure_items BEGIN SELECT RAISE(ABORT, 'variable_measure_items is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS lots_no_update BEFORE UPDATE ON lots BEGIN SELECT RAISE(ABORT, 'lots is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS lots_no_delete BEFORE DELETE ON lots BEGIN SELECT RAISE(ABORT, 'lots is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS lot_events_no_update BEFORE UPDATE ON lot_events BEGIN SELECT RAISE(ABORT, 'lot_events is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS lot_events_no_delete BEFORE DELETE ON lot_events BEGIN SELECT RAISE(ABORT, 'lot_events is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS scan_log_no_update BEFORE UPDATE ON scan_log BEGIN SELECT RAISE(ABORT, 'scan_log is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS scan_log_no_delete BEFORE DELETE ON scan_log BEGIN SELECT RAISE(ABORT, 'scan_log is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS inventory_proposal_decisions_no_update BEFORE UPDATE ON inventory_proposal_decisions BEGIN SELECT RAISE(ABORT, 'inventory_proposal_decisions is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS inventory_proposal_decisions_no_delete BEFORE DELETE ON inventory_proposal_decisions BEGIN SELECT RAISE(ABORT, 'inventory_proposal_decisions is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS inventory_proposals_no_delete BEFORE DELETE ON inventory_proposals BEGIN SELECT RAISE(ABORT, 'inventory_proposals is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS inventory_proposals_no_update BEFORE UPDATE ON inventory_proposals BEGIN SELECT RAISE(ABORT, 'inventory_proposals is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS lots_no_update BEFORE UPDATE ON lots BEGIN SELECT RAISE(ABORT, 'lots is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS lots_no_delete BEFORE DELETE ON lots BEGIN SELECT RAISE(ABORT, 'lots is append-only'); END;

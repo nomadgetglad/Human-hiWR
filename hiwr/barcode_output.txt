@@ -1,0 +1,48 @@
+CHECK DIGITS
+   0 36000 29145 ? -> check digit 2  (036000291452)
+   EAN-13 400638133393 ? -> 1
+   UPC-E 00123457 expands to 001234000057
+   6-pack GTIN-14: 10036000291459   24-can case: 50036000291457
+   House code #1023 (marinara, no UPC): 400000010236
+   Typo 036000291453 valid? False
+
+SCANS AT THE DOCK (stocker_tim)
+   036000291452     ok               COLA-12 +1 each (each)
+   50036000291457   ok               COLA-12 +24 each (case)
+   50036000291458   bad_check_digit  "That code didn't read cleanly. Scan again or type it."
+
+UNKNOWN CODE: Tim scans a chips case HiWR has never seen
+   unknown_code: "What is this, and how many are inside?"
+   suggestion CHIP-01  Tortilla chips 13oz    similarity 0.795
+   suggestion CHIP-09  Tortilla Chips 13 oz   similarity 0.795
+   Tim picks CHIP-01, 12 per case -> next scan: unconfirmed_code
+   chef_marco confirms -> ok, +12 each; CHIP-01 back stock now 14
+
+DELI SCALE: 2 01234 0 0599 5
+   $5.99 at $8.99/lb -> 0.666 lb of turkey breast sliced
+
+GS1-128 CHICKEN CASE
+   (01)10012345000208(17)270315(10)LOT4471B(3201)000402
+   parsed: {'gtin': '10012345000208', 'expires_on': '2027-03-15', 'lot': 'LOT4471B', 'net_lb': 40.2}
+   ok: +40.2 lb (label weight wins over the nominal 40), lot id 1
+   same case, plain code only -> needs_lot: "Type the lot and use-by date from the case, or photograph the label."
+
+RECALL: lot LOT4471B
+   chicken thigh, use by 2027-03-15, from Sysco, status on_hold, 1 receiving scan(s)
+   next scan of that lot -> lot_on_hold: "This lot is on hold. Set it aside and tell a manager."
+
+STOCK VECTORS (one row of numbers per SKU)
+   stocker_tim: 4 rows x 10 columns (costs hidden)
+   chef_marco: 4 rows x 13 columns
+   SKU              on_hand     per_day_28 days_of_supply days_to_expiry     margin_pct
+   CHIP-01               18              2              9           9999           53.2
+   CHIP-09                3              1              3           9999           54.3
+   COLA-12               36              6              6           9999           61.6
+   YOGT-03               16              1             16              5           48.2
+
+PROPOSALS (a manager decides; nothing is ordered here)
+   #2 reorder CHIP-09: 3.0 days left, 3 days to arrive -> 7 case(s) of 1 = 7
+   #3 expiry risk YOGT-03: ~11 units by use-by
+   #4 possible duplicate SKUs CHIP-01 and CHIP-09 (similarity 1.0)
+   stocker_tim accepts #2: BLOCKED (a manager (level 2+) decides inventory proposals)
+   chef_marco accepts #2: recorded; the order itself is still a purchase draft for a person
