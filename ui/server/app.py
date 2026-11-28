@@ -41,6 +41,7 @@ import hiwr_notices as notices_mod
 import hiwr_taxdocs as taxdocs
 import hiwr_portfolio as pf
 import hiwr_recall as recall
+import hiwr_torch
 import hiwr_training as training
 import hiwr_sensitivity as sens
 import hiwr_idintake as idin
@@ -1008,6 +1009,7 @@ def prep(x_member: str = Header(None)):
         if not _has_prep(d):
             return {"empty": True}
         p = prep_plan(d, PREP_ITEM, now_iso(), seed.RESERVATIONS, seed.USUAL_RESERVATIONS)
+        p["risk"] = hiwr_torch.risk(d, PREP_ITEM, now_iso(), p)
         item = dict(d.execute("SELECT * FROM prep_items WHERE item=?", (PREP_ITEM,)).fetchone())
         batches = [dict(r) for r in d.execute("SELECT made_at, qty, member FROM prep_batches WHERE item=? ORDER BY made_at DESC LIMIT 8", (PREP_ITEM,))]
         left = d.execute("SELECT on_hand FROM materials WHERE material=?", (item["input_material"],)).fetchone()[0]

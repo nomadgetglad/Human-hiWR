@@ -3,7 +3,8 @@
 Claude Code reads this file on its own whenever a session starts in this folder. Nothing runs it.
 
 ## Layout
-- `hiwr/`: sample code, Python 3 + SQLite, standard library only (except `hiwr_signing.py`, which needs `cryptography`).
+- `hiwr/`: sample code, Python 3 + SQLite, standard library only (except `hiwr_signing.py`, which needs `cryptography`,
+  and `hiwr_torch.py`, which uses PyTorch when installed and is skipped without it).
 - `ui/`: the Human app (FastAPI + React PWA).
 - `agent/`: the operations assistant runner (Ollama locally, Claude in the cloud). See `agent/README.md`.
 - `tests/`: `python -m pytest tests`. Demos: `cd hiwr && python run_all_demos.py` (checks saved outputs).

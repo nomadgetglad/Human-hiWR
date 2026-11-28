@@ -641,6 +641,12 @@ export function Prep() {
         <span className="fry-sub">
           {t("Next batch about")} <b>{p.next_batch_at}</b>
         </span>
+        {p.risk && (
+          <span className="fry-sub">
+            {t("Chance of running out this hour")}: <b>{p.risk.risk_pct}%</b>
+            {p.risk.safe_batches > fry && ` · ${p.risk.safe_batches} ${t("batches keep it under 5%")}`}
+          </span>
+        )}
       </div>
       <div className="grid-4">
         <Kpi label={t("Sold today")} value={`${p.sold} ${p.unit}`} sub={p.running} />

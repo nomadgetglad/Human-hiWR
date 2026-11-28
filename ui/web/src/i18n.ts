@@ -32,6 +32,8 @@ const es: Record<string, string> = {
   "Next hour": "Próxima hora",
   "Rest of night": "Resto de la noche",
   "Next batch about": "Próxima tanda a las",
+  "Chance of running out this hour": "Probabilidad de quedarse sin en esta hora",
+  "batches keep it under 5%": "tandas la bajan a menos de 5%",
   "Nothing to fry yet": "Nada que freír todavía",
   "Recent batches": "Tandas recientes",
   "left in inventory": "quedan en inventario",
