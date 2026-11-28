@@ -48,6 +48,7 @@ and the planning example says "Employee A" instead of a real-sounding name.
 2. Install Ollama from ollama.com, then in a terminal:
    ```
    ollama pull gpt-oss:20b
+   ollama pull nomic-embed-text
    ```
    `qwen3:30b` also works. Both need a recent graphics card or plenty of RAM (32 GB or more is comfortable).
    The runner sets `num_ctx` to 16384, because Ollama's default context cuts the prompt off.
@@ -76,6 +77,12 @@ with their name, until passkey sign-in lands.
 
 Business files (invoices, schedules, fee policy, warranty terms) go in the data folder (`data/` by default) as
 CSV or text. Drafts the assistant writes land in `data/drafts/`. Nothing there is ever sent.
+
+## Rules and app design
+
+The rules and the app design are small chunks in a local vector index. Each request gets the hard rules
+(always) plus the few chunks closest to the question. The hard rules are enforced in code either way; the
+search only shapes what the model reads. See `knowledge/README.md`.
 
 ## Tests
 
