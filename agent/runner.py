@@ -25,6 +25,7 @@ from . import config as config_mod, privacy  # noqa: E402
 from .backends import OllamaBackend, ClaudeBackend, BackendUnavailable  # noqa: E402
 from .router import route  # noqa: E402
 from .tools import Toolbox, PENDING  # noqa: E402
+from .vectors import make_index  # noqa: E402
 
 CORE = (HERE / "prompts" / "core.md").read_text(encoding="utf-8")
 METHODS_DIR = HERE / "prompts" / "methods"
@@ -36,7 +37,7 @@ def prepare_db(db):
 
 
 class Agent:
-    def __init__(self, db, cfg, requester, backends=None, clock=None, db_path=None, on_cloud_payload=None):
+    def __init__(self, db, cfg, requester, backends=None, clock=None, db_path=None, on_cloud_payload=None, rules=None):
         self.db, self.cfg, self.requester = prepare_db(db), cfg, requester
         self.people = privacy.people_from_db(db, cfg["privacy"]["extra_names"], cfg["privacy"]["hide_vendors"])
         kw = {"clock": clock} if clock else {}
@@ -46,6 +47,8 @@ class Agent:
         self.history = []                                  # [(user_text, reply)] as the person saw them
         self.on_cloud_payload = on_cloud_payload
         self.last_route = None
+        # The rules index only shapes the prompt. Every check that matters lives in self.tools and the guards.
+        self.rules = rules if rules is not None else (make_index(cfg) if cfg["rules"]["retrieval"] else None)
 
     def _first(self, member):
         for p in self.people:
@@ -53,9 +56,13 @@ class Agent:
                 return p.first
         return member
 
-    def _system(self, methods):
+    def _system(self, methods, text=""):
         parts = [CORE]
-        if methods:
+        if self.rules is not None:
+            block, self.rule_hits = self.rules.context(text, self.tools.level, self.cfg["rules"]["top_k"], methods)
+            parts.append(block)
+        elif methods:
+            self.rule_hits = []
             parts.append("# Methods loaded for this request")
             parts += [(METHODS_DIR / f"{m}.md").read_text(encoding="utf-8") for m in methods]
         return "\n\n".join(parts)
@@ -66,7 +73,7 @@ class Agent:
         header = (f"[Requester: {self._first(self.requester)} ({self.requester}), level {lvl} {LEVEL_NAMES[lvl]}. "
                   f"Now: {self.tools.clock()}]")
         user = f"{header}\n\n{text}"
-        system = self._system(methods)
+        system = self._system(methods, text)
         self.tools.turn_pending, self.tools.calls = [], []
         self.tools.loaded_methods = set(methods)
 
@@ -86,7 +93,8 @@ class Agent:
         reply = self._approval_guard(reply)
         if note:
             reply = f"{note}\n\n{reply}"
-        self.last_route = {"backend": backend, "methods": methods, "why": why}
+        self.last_route = {"backend": backend, "methods": methods, "why": why, "rules": getattr(self, "rule_hits", []),
+                           "rules_note": self.rules.note if self.rules is not None else None}
         self.db.execute("INSERT INTO agent_log(requester, level, backend, model, route_why, tools, hidden) VALUES (?,?,?,?,?,?,?)",
                         (self.requester, lvl, backend, self.backends[backend].model, why,
                          json.dumps(self.tools.calls), self.pz.hidden_count))

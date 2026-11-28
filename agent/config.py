@@ -12,6 +12,8 @@ DEFAULTS = {
     "local": {"host": "http://localhost:11434", "model": "gpt-oss:20b", "num_ctx": 16384, "timeout_seconds": 300},
     "cloud": {"model": "claude-opus-5-5", "effort": "medium", "max_tokens": 16000},
     "hybrid": {"cloud_methods": ["planning", "patterns"], "fall_back_to_local": True},
+    "rules": {"retrieval": True, "embedder": "ollama", "embed_model": "nomic-embed-text", "top_k": 6,
+              "embed_timeout_seconds": 60},
     "privacy": {"extra_names": [], "hide_vendors": False},
     "quickbooks": {"connected": False, "export_file": ""},
     "business": {"phone": "", "text_number": "", "hours": "", "on_duty_manager": ""},
@@ -42,4 +44,6 @@ def load(path=None, overrides=None):
         raise ValueError(f"mode must be one of {MODES}, not {cfg['mode']!r}")
     if cfg["local"]["num_ctx"] < MIN_NUM_CTX:
         raise ValueError(f"local.num_ctx must be at least {MIN_NUM_CTX}; smaller cuts the prompt off")
+    if cfg["rules"]["embedder"] not in ("ollama", "hash"):
+        raise ValueError(f"rules.embedder must be 'ollama' or 'hash', not {cfg['rules']['embedder']!r}")
     return cfg

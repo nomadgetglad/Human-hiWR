@@ -6,6 +6,8 @@ Claude Code reads this file on its own whenever a session starts in this folder.
 - `hiwr/`: sample code, Python 3 + SQLite, standard library only (except `hiwr_signing.py`, which needs `cryptography`).
 - `ui/`: the Human app (FastAPI + React PWA).
 - `agent/`: the operations assistant runner (Ollama locally, Claude in the cloud). See `agent/README.md`.
+- `agent/knowledge/`: rules and app design as small chunks for the vector search. A rule that must always
+  hold goes in code with a test first; its chunk is only a reminder.
 - `tests/`: `python -m pytest tests`. Demos: `cd hiwr && python run_all_demos.py` (checks saved outputs).
 
 ## Rules for any change

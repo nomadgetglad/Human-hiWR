@@ -29,6 +29,17 @@ cloud_methods = ["planning", "patterns"]
 # If the cloud can't be reached, run the request locally instead of failing.
 fall_back_to_local = true
 
+[rules]
+# The app's rules and design are split into small chunks (agent/knowledge and agent/prompts/methods) and
+# searched by meaning, so each request gets the few that matter instead of every method file.
+# The hard rules (money, levels, privacy, history) are always sent, and enforced in code either way.
+retrieval = true                # false = the old way: whole method files picked by keywords
+embedder = "ollama"             # "ollama" (run `ollama pull nomic-embed-text` once) or "hash" (built in, no install)
+embed_model = "nomic-embed-text"
+top_k = 6                       # how many matching chunks go in the prompt
+embed_timeout_seconds = 60
+# Embeddings are always made on this computer. If Ollama is down, the built-in word matcher takes over.
+
 [privacy]
 # Extra people to hide from the cloud, beyond those already in the hiWR database.
 extra_names = []

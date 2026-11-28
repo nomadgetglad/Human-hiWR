@@ -5,3 +5,4 @@ __pycache__/
 agent/config.toml
 agent/sample.db
 *.key
+agent/.vector_cache/
