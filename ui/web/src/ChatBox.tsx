@@ -1,7 +1,9 @@
 // One chat box for the whole app: the assistant (Home and its own screen) and team chat in Mesh look and work
 // the same. Same bubbles (yours on the right), same input, Enter sends and Shift+Enter makes a new line, same Send
-// button. The log scrolls inside itself, so the page never jumps.
+// button. The log scrolls inside itself, so the page never jumps. "/find words" searches the chat history instead
+// of sending (nothing is sent to the team or the assistant).
 import { useEffect, useRef, type ReactNode } from "react";
+import { findCommand } from "./ChatHistory";
 import { Button, Label, TextArea, TextField } from "react-aria-components";
 import { useT } from "./i18n";
 
@@ -17,6 +19,7 @@ export function ChatBox({
   empty,
   placeholder,
   error,
+  onFind,
 }: {
   lines: ChatLine[];
   text: string;
@@ -27,6 +30,7 @@ export function ChatBox({
   empty?: ReactNode;
   placeholder?: string;
   error?: string;
+  onFind?: (q: string) => void;
 }) {
   const t = useT();
   const log = useRef<HTMLDivElement>(null);
@@ -34,6 +38,12 @@ export function ChatBox({
     if (log.current) log.current.scrollTop = log.current.scrollHeight;
   }, [lines.length, busy]);
   const send = () => {
+    const f = onFind ? findCommand(text) : null;
+    if (f !== null && onFind) {
+      onFind(f);
+      setText("");
+      return;
+    }
     if (text.trim() && !busy) onSend(text.trim());
   };
   return (
@@ -76,10 +86,11 @@ export function ChatBox({
             }}
           />
         </TextField>
-        <Button type="submit" className="btn btn-primary" isDisabled={busy || !text.trim()}>
-          {t("Send")}
+        <Button type="submit" className="btn btn-primary" isDisabled={(busy && !findCommand(text)) || !text.trim()}>
+          {onFind && findCommand(text) !== null ? `🔍 ${t("Find")}` : t("Send")}
         </Button>
       </form>
+      {onFind && <p className="muted small chat-hint">{t("Tip: type /find and a few words to search past chats.")}</p>}
     </div>
   );
 }

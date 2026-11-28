@@ -16,6 +16,7 @@ HttpOnly cookie, and every POST must carry the X-Human header so another site ca
 The test restaurant (sample data) keeps the X-Member switcher so demos and tests can jump between people.
 """
 import contextvars
+from datetime import datetime
 import itertools
 import os
 import re
@@ -41,6 +42,7 @@ import hiwr_notices as notices_mod
 import hiwr_taxdocs as taxdocs
 import hiwr_portfolio as pf
 import hiwr_recall as recall
+import hiwr_chatlog as chatlog
 import hiwr_torch
 import hiwr_training as training
 import hiwr_sensitivity as sens
@@ -165,6 +167,7 @@ def reset(sample=True, demo=None):
         _ensure_confirm_log(STATE["db"])
         _ensure_upc(STATE["db"])
         _ensure_team_chat(STATE["db"])
+        chatlog.ensure(STATE["db"])
         notices_mod.ensure(STATE["db"])
         taxdocs.ensure(STATE["db"])
         pf.ensure(STATE["db"])
@@ -177,6 +180,8 @@ def reset(sample=True, demo=None):
                               ["Receiving check: temps and dates", "Rotation: oldest date forward", "Pull list and par levels",
                                "Safe lifting and ladder use"])
             STATE["db"].commit()
+        if sample and demo in (None, "stew"):
+            chatlog.seed_sample(STATE["db"])      # a few months of chat history to browse and search
         if sample:
             for sku, upc in seed.SAMPLE_UPCS.items():
                 STATE["db"].execute("UPDATE products SET upc=? WHERE sku=?", (upc, sku))
@@ -975,9 +980,78 @@ def chat_post(c: ChatPost, x_member: str = Header(None)):
     with LOCK:
         m = member(x_member)
         ch = _channel(m["id"], c.to)
-        mid = db().execute("INSERT INTO team_messages(sender, channel, text) VALUES (?,?,?)", (m["id"], ch, text)).lastrowid
+        mid = db().execute("INSERT INTO team_messages(at, sender, channel, text) VALUES (?,?,?,?)",
+                           (_chat_now(), m["id"], ch, text)).lastrowid
         db().commit()
         return {"id": mid}
+
+
+def _chat_now():
+    """Chat times are this computer's clock (the business's own time), so a message sent at 9 PM lands on today."""
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+
+# ---------------- Chat history: by month, then day and time; findable from the chat box ----------------
+# One history for the assistant and team chat (see hiwr_chatlog.py). Access is decided before anything is read:
+# your own assistant chats, the team channel, and only the direct-message threads you're in.
+
+def _chat_embedder():
+    """The local embedding model for meaning search, or None for words only. Never a language model.
+    HUMAN_CHAT_EMBED=off turns it off; =hash uses the built-in word hasher (tests)."""
+    mode = os.environ.get("HUMAN_CHAT_EMBED", "auto").lower()
+    if mode == "off":
+        return None
+    try:
+        from agent import vectors          # the rules index's embedders (same local model)
+    except ImportError:
+        return None
+    if mode == "hash":
+        return vectors.HashEmbedder()
+    try:
+        cfg = _agent_cfg()
+        r = cfg.get("rules", {})
+        if r.get("embedder", "ollama") != "ollama":
+            return None
+        return vectors.OllamaEmbedder(cfg["local"]["host"], r.get("embed_model", "nomic-embed-text"), timeout=5)
+    except Exception:  # noqa: BLE001 - no config: find by words
+        return None
+
+
+@app.get("/api/history/months")
+def history_months(x_member: str = Header(None)):
+    with LOCK:
+        m = member(x_member)
+        d = db()
+        msgs, held = chatlog.messages(d, m["id"], m["level"], name_of=lambda x: _first_name(d, x))
+        return {"months": chatlog.months(msgs), "total": len(msgs), "held": held}
+
+
+@app.get("/api/history")
+def history_month(month: str, source: str = "", x_member: str = Header(None)):
+    if not re.fullmatch(r"20\d\d-(0[1-9]|1[0-2])", month):
+        raise HTTPException(400, "Pick a month like 2026-11")
+    if source and source not in chatlog.SOURCES:
+        raise HTTPException(400, "source is assistant, team or dm")
+    with LOCK:
+        m = member(x_member)
+        d = db()
+        msgs, held = chatlog.messages(d, m["id"], m["level"], name_of=lambda x: _first_name(d, x))
+        if source:
+            msgs = [x for x in msgs if x["source"] == source]
+        return {"month": month, "label": chatlog.month_label(month), "days": chatlog.by_day(msgs, month), "held": held}
+
+
+@app.get("/api/history/search")
+def history_search(q: str = "", x_member: str = Header(None)):
+    q = q.strip()[:200]
+    if not q:
+        raise HTTPException(400, "Type what to find")
+    emb = _chat_embedder()
+    with LOCK:
+        m = member(x_member)
+        d = db()
+        return chatlog.search(d, m["id"], m["level"], q, datetime.now().date(), name_of=lambda x: _first_name(d, x),
+                              embedder=emb)
 
 
 @app.get("/api/staff/fill")
@@ -1934,6 +2008,7 @@ def assistant_ask(a: Ask, x_member: str = Header(None)):
             fast = _staffing_answer(db(), m, text)
             if fast:
                 chat["agent"].history.append((text, fast))
+                chatlog.record_assistant(db(), m["id"], m["level"], text, fast, "schedule", _chat_now())
                 return {"role": "assistant", "text": fast, "backend": "schedule"}
             chat["busy"] = True
     try:
@@ -1952,6 +2027,11 @@ def assistant_ask(a: Ask, x_member: str = Header(None)):
     if not reply.strip():
         chat["agent"].history.pop()               # don't keep a blank turn in the conversation
         raise HTTPException(502, "The local model gave an empty answer. Ask again.")
+    with LOCK:
+        try:
+            chatlog.record_assistant(db(), m["id"], m["level"], text, reply, chat["agent"].last_route["backend"], _chat_now())
+        except sqlite3.ProgrammingError:
+            pass                                  # the business was switched; this answer belonged to the old data
     return {"role": "assistant", "text": reply, "backend": chat["agent"].last_route["backend"]}
 
 

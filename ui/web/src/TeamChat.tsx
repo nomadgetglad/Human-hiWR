@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Button } from "react-aria-components";
 import { ChatBox } from "./ChatBox";
+import { ChatHistory } from "./ChatHistory";
 import { api } from "./api";
 import { useT } from "./i18n";
 
@@ -16,6 +17,7 @@ export function TeamChat() {
   const [people, setPeople] = useState<Person[]>([]);
   const [text, setText] = useState("");
   const [err, setErr] = useState("");
+  const [hist, setHist] = useState<{ q: string; n: number } | null>(null);
 
   const load = () =>
     api<{ messages: Msg[]; people: Person[] }>(`/api/chat?to=${encodeURIComponent(to)}`)
@@ -45,7 +47,13 @@ export function TeamChat() {
 
   return (
     <div className="panel team-chat">
-      <h2 className="h2">💬 {t("Team chat")}</h2>
+      <div className="row-between">
+        <h2 className="h2">💬 {t("Team chat")}</h2>
+        <Button className="btn btn-sm" onPress={() => setHist(hist ? null : { q: "", n: 0 })}>
+          🗂 {t("History")}
+        </Button>
+      </div>
+      {hist && <ChatHistory key={hist.n} query={hist.q} source={hist.q ? "" : to === "team" ? "team" : "dm"} onClose={() => setHist(null)} />}
       <div className="tc-wrap">
         <div className="tc-list" role="tablist" aria-label={t("Conversations")}>
           <Button className={`tc-who ${to === "team" ? "tc-on" : ""}`} onPress={() => setTo("team")}>
@@ -69,6 +77,7 @@ export function TeamChat() {
             onSend={send}
             error={err}
             placeholder={t("Write a message")}
+            onFind={(q) => setHist({ q, n: Date.now() })}
           />
         </div>
       </div>

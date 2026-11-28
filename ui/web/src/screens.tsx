@@ -7,6 +7,7 @@ import { useT } from "./i18n";
 import { useData } from "./useData";
 import { TeamChat } from "./TeamChat";
 import { ChatBox } from "./ChatBox";
+import { ChatHistory } from "./ChatHistory";
 import { MyDocuments, NoticesPanel, TaxFormsAdmin, WeekSchedule } from "./Notices";
 import { Rotator } from "./Add";
 import { AboutAndDisclaimers, SensitivityDial } from "./SettingsExtras";
@@ -1027,6 +1028,7 @@ export function Assistant({ embedded = false, me }: { embedded?: boolean; me?: M
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [hist, setHist] = useState<{ q: string; n: number } | null>(null);
   const end = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -1076,11 +1078,16 @@ export function Assistant({ embedded = false, me }: { embedded?: boolean; me?: M
     <section className={embedded ? "panel assistant-home" : undefined}>
       <div className="row-between">
         {embedded ? <h2 className="h2">✨ {t("Ask the assistant")}</h2> : <h1 className="h1">{t("Ask the assistant")}</h1>}
-        {msgs.length > 0 && (
-          <Button className="btn btn-sm btn-ghost" onPress={clear} isDisabled={busy}>
-            {t("New conversation")}
+        <div className="row-gap">
+          <Button className="btn btn-sm" onPress={() => setHist(hist ? null : { q: "", n: 0 })}>
+            🗂 {t("History")}
           </Button>
-        )}
+          {msgs.length > 0 && (
+            <Button className="btn btn-sm btn-ghost" onPress={clear} isDisabled={busy}>
+              {t("New conversation")}
+            </Button>
+          )}
+        </div>
       </div>
       <p className="muted small">
         {t("Runs on this computer. Nothing leaves it.")} {model && <>({model}) </>}
@@ -1109,7 +1116,9 @@ export function Assistant({ embedded = false, me }: { embedded?: boolean; me?: M
         placeholder={t("Your question")}
         error={error}
         empty={<></>}
+        onFind={(q) => setHist({ q, n: Date.now() })}
       />
+      {hist && <ChatHistory key={hist.n} query={hist.q} source={hist.q ? "" : "assistant"} onClose={() => setHist(null)} />}
     </section>
   );
 }
