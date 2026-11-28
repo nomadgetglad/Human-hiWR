@@ -7,6 +7,7 @@ import os
 import pytest
 
 os.environ["HUMAN_DB"] = ":memory:"     # tests never touch a real account file
+os.environ.setdefault("HUMAN_CHAT_EMBED", "off")   # chat history search by words only, unless a test swaps in an embedder
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "hiwr"))

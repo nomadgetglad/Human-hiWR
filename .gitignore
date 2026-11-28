@@ -2,4 +2,6 @@ __pycache__/
 *.pyc
 *.db
 .pytest_cache/
+agent/config.toml
+agent/sample.db
 *.key

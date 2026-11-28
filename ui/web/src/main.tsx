@@ -6,7 +6,11 @@ import { ProposalProvider } from "./ConfirmCard";
 import { LangContext, useT, type Lang } from "./i18n";
 import { SignIn } from "./SignIn";
 import { TopBar } from "./TopBar";
-import { Accounting, CustomerService, Home, Inventory, Prep, Staff, Tasks, Team } from "./screens";
+import { Scene } from "./Scene";
+import { Portfolio } from "./Portfolio";
+import { Roles } from "./Roles";
+import { Tour, tourKey } from "./Tour";
+import { Accounting, Assistant, BusinessProfile, MeshScreen, CustomerService, Home, Inventory, Prep, Staff, Tasks, Team } from "./screens";
 import { useData } from "./useData";
 import "./styles.css";
 
@@ -16,6 +20,14 @@ function App() {
   const [lang, setLang] = useState<Lang>("en");
   const [screen, setScreen] = useState(() => new URLSearchParams(location.search).get("screen") ?? "home");
   const [toast, setToast] = useState("");
+  const [touring, setTouring] = useState(false);
+  // First time this person opens the app on this device: start the guided tour on Home
+  useEffect(() => {
+    if (me && !localStorage.getItem(tourKey(me)) && !new URLSearchParams(location.search).get("screen")) {
+      setScreen("home");
+      setTouring(true);
+    }
+  }, [me?.id]);
   const [authState, setAuthState] = useState<AuthStatus | null>(null);
   const [signedIn, setSignedIn] = useState(0); // bumps after a sign-in or sign-out
 
@@ -63,7 +75,9 @@ function App() {
     setScreen("home");
     setSignedIn((n) => n + 1);
   };
-  const allowed = new Set([...me.menu.map((m) => m.id), "home", "tasks", "warehouse", "stew", "lab"]);
+  // Only sections the server put on the menu (it hides ones this member can't open or that have nothing in them).
+  const allowed = new Set(["home", "mesh", ...(me.level >= 2 ? ["roles"] : []), ...(me.sample ? ["scene"] : []), ...(me.level >= 4 ? ["settings"] : []), ...me.menu.flatMap((m) => [m.id, ...(m.children ?? [])])]);
+  const invTabs = me.menu.find((m) => m.id === "inventory")?.children ?? [];
   const go = (s: string) => setScreen(allowed.has(s) ? s : "home");
   const view = allowed.has(screen) ? screen : "home";
 
@@ -85,17 +99,24 @@ function App() {
               />
             }
           />
-          <Nav me={me} screen={view} go={go} />
+          <Nav me={me} screen={view} go={go} tour={() => { setScreen("home"); setTouring(true); }} />
           <main className="main" id="main">
             {view === "home" && <Home me={me} go={go} />}
             {view === "team" && <Team />}
             {view === "staff" && <Staff />}
             {view === "prep" && <Prep />}
-            {["inventory", "warehouse", "stew", "lab"].includes(view) && <Inventory tab={view === "inventory" ? undefined : view} />}
+            {["inventory", "warehouse", "stew", "lab"].includes(view) && <Inventory tab={view === "inventory" ? undefined : view} tabs={invTabs} />}
             {view === "cs" && <CustomerService />}
             {view === "accounting" && <Accounting />}
             {view === "tasks" && <Tasks />}
+            {view === "assistant" && <Assistant />}
+            {view === "settings" && <BusinessProfile />}
+            {view === "mesh" && <MeshScreen />}
+            {view === "scene" && <Scene go={go} />}
+            {view === "portfolio" && <Portfolio />}
+            {view === "roles" && <Roles />}
           </main>
+          {touring && view === "home" && <Tour me={me} onDone={() => setTouring(false)} />}
           {toast && (
             <div className="toast" role="alert">
               {toast}
@@ -107,9 +128,9 @@ function App() {
   );
 }
 
-function Nav({ me, screen, go }: { me: Me; screen: string; go: (s: string) => void }) {
+function Nav({ me, screen, go, tour }: { me: Me; screen: string; go: (s: string) => void; tour: () => void }) {
   const t = useT();
-  const items = [{ id: "home", label: "Home" }, ...me.menu, ...(me.level < 2 ? [{ id: "tasks", label: "My tasks" }] : [])];
+  const items = [{ id: "home", label: "Home" }, ...me.menu];
   const active = ["warehouse", "stew", "lab"].includes(screen) ? "inventory" : screen;
   return (
     <nav className="nav" aria-label="Main menu">
@@ -118,6 +139,9 @@ function Nav({ me, screen, go }: { me: Me; screen: string; go: (s: string) => vo
           {t(m.label)}
         </Button>
       ))}
+      <Button className="nav-item nav-tour" onPress={tour}>
+        🧭 {t("Take the tour")}
+      </Button>
     </nav>
   );
 }

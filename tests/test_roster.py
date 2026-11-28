@@ -221,3 +221,232 @@ def test_your_team_survives_a_restart(tmp_path, monkeypatch):
     appmod.reset(sample=False)
     assert [m["id"] for m in c.get("/api/members").json()] == ["owner_alex", "cook_maria"]
     appmod.reset()
+
+
+# ---------- job role: picked from a list, by a manager or the account holder ----------
+
+def test_job_role_comes_from_the_pick_list(c):
+    roles = c.get("/api/team", headers=H("owner_alex")).json()["job_roles"]
+    assert "Cook" in roles and "Dishwasher" in roles and "Owner" not in roles
+    assert add(c, "owner_alex", first_name="Maria", title="Head honcho").status_code == 400
+    assert add(c, "chef_marco", first_name="Maria", title="Dishwasher").status_code == 200
+
+
+def test_only_manager_or_owner_sets_a_job_role(c):
+    r = add(c, "fry_rosa", first_name="Maria", title="Cook")
+    assert r.status_code == 403 and "job role" in r.json()["detail"]
+
+
+# ---------- menu: a section shows only if you can open it and it has something in it ----------
+
+def _menu(c, m):
+    return {x["id"]: x for x in c.get("/api/me", headers=H(m)).json()["menu"]}
+
+
+def test_blank_account_menu_is_only_where_you_start(blank):
+    assert list(_menu(blank, "owner_alex")) == ["team", "assistant"]
+
+
+def test_sample_menu_shows_sections_with_work(c):
+    owner = _menu(c, "owner_alex")
+    assert {"team", "staff", "inventory", "prep", "cs", "assistant", "accounting"} <= set(owner)
+    assert "lab" not in owner["inventory"]["children"]
+    assert "accounting" not in _menu(c, "chef_marco") and "team" not in _menu(c, "fry_rosa")
+
+
+def test_new_staff_with_nothing_to_do_sees_little(c):
+    assert add(c, "owner_alex", first_name="Maria", title="Dishwasher").status_code == 200
+    m = _menu(c, "dishwasher_maria")
+    assert "prep" not in m and "tasks" not in m and "team" not in m and "accounting" not in m
+
+
+# ---------- business profile (the Human logo): account holder only ----------
+
+def test_business_profile_is_owner_only(c):
+    assert c.get("/api/settings", headers=H("manager_jo")).status_code == 403
+    s = c.get("/api/settings", headers=H("owner_alex")).json()
+    assert [l["level"] for l in s["sensitivity"]["levels"]] == [0, 1, 2, 3, 4]
+    assert s["authenticator"]["status"] == "not_set_up" and s["authenticator"]["events"] == []
+
+
+def test_every_confirm_card_outcome_is_logged(c):
+    assert add(c, "owner_alex", first_name="Maria", title="Cook").status_code == 200
+    r = c.post("/api/proposals", json={"kind": "add_member", "params": {"first_name": "Ana", "title": "Host"}}, headers=H("owner_alex"))
+    c.post(f"/api/proposals/{r.json()['id']}/cancel", headers=H("owner_alex"))
+    log = c.get("/api/settings", headers=H("owner_alex")).json()["confirmations"]
+    assert [x["outcome"] for x in log[:2]] == ["cancelled", "confirmed"]
+
+
+def test_confirm_log_is_append_only(c):
+    import sqlite3 as _sq
+    add(c, "owner_alex", first_name="Maria", title="Cook")
+    with pytest.raises(_sq.DatabaseError):
+        appmod.db().execute("UPDATE confirm_log SET outcome='cancelled'")
+    with pytest.raises(_sq.DatabaseError):
+        appmod.db().execute("DELETE FROM confirm_log")
+
+
+# ---------- trial demos by business type (stock house, stew, lab), offered before a plan is bought ----------
+
+@pytest.mark.parametrize("demo,has,lacks", [
+    ("stock", {"inventory"}, {"prep", "cs", "staff"}),
+    ("stew", {"staff", "prep", "cs", "inventory", "accounting"}, set()),
+    ("lab", {"inventory", "accounting"}, {"prep", "cs"}),
+])
+def test_each_demo_shows_its_own_business(blank, demo, has, lacks):
+    r = blank.post(f"/api/demo/reset?demo={demo}", headers=H("owner_alex")).json()
+    assert r["demo"] == demo and r["sample"] is True
+    menu = _menu(blank, "owner_alex")
+    assert has <= set(menu) and not (lacks & set(menu))
+    inv = menu.get("inventory", {}).get("children", [])
+    assert {"stock": ["warehouse"], "stew": ["stew"], "lab": ["lab"]}[demo] == inv
+
+
+def test_lab_demo_has_a_job_with_work_to_do(blank):
+    blank.post("/api/demo/reset?demo=lab", headers=H("owner_alex"))
+    lab = blank.get("/api/inventory/lab", headers=H("owner_alex")).json()
+    job = lab["jobs"][0]
+    assert job["name"].startswith("Henderson") and "contract" in job
+    assert [p["status"] for p in job["phases"]][:4] == ["passed", "passed", "passed", "failed"]
+    assert any(t["type"] for t in lab["tickets"])
+    crew = blank.get("/api/inventory/lab", headers=H("carp_luis")).json()["jobs"][0]
+    assert "contract" not in crew and "labor" not in crew["phases"][0]
+
+
+def test_only_owner_switches_and_unknown_demo_is_refused(blank):
+    assert blank.post("/api/demo/reset?demo=nope", headers=H("owner_alex")).status_code == 400
+    blank.post("/api/demo/reset?demo=stew", headers=H("owner_alex"))
+    assert blank.post("/api/demo/reset?demo=lab", headers=H("chef_marco")).status_code == 403
+    assert blank.post("/api/demo/reset?sample=false", headers=H("owner_alex")).json()["demo"] is None
+
+
+def test_business_profile_suggests_next_steps(blank):
+    tips = {x["id"] for x in blank.get("/api/settings", headers=H("owner_alex")).json()["suggestions"]}
+    assert {"team", "approvers", "assistant", "hiwr"} <= tips and "demo" not in tips
+    blank.post("/api/demo/reset?demo=stew", headers=H("owner_alex"))
+    tips = {x["id"] for x in blank.get("/api/settings", headers=H("owner_alex")).json()["suggestions"]}
+    assert "demo" in tips and "team" not in tips and "approvers" not in tips
+
+
+# ---------- Scan: the browser decodes; the server looks the code up ----------
+
+def test_scan_finds_products_by_upc_and_tickets_by_id(c):
+    r = c.post("/api/scan/lookup", json={"code": "036000291452", "kind": "UPC label"}, headers=H("stocker_tim")).json()
+    assert [m["id"] for m in r["matches"]] == ["SALS-02"]
+    r = c.post("/api/scan/lookup", json={"code": "SHP-0001", "kind": "QR code"}, headers=H("fry_rosa")).json()
+    assert r["matches"][0]["type"] == "Ticket"
+    assert c.post("/api/scan/lookup", json={"code": "nothing-like-this"}, headers=H("fry_rosa")).json()["matches"] == []
+    assert c.post("/api/scan/lookup", json={"code": "SALS-02"}).status_code == 401
+
+
+def test_scan_works_on_a_blank_account(blank):
+    assert blank.post("/api/scan/lookup", json={"code": "012345678905"}, headers=H("owner_alex")).json()["matches"] == []
+
+
+# ---------- Mesh: staff organizer from employee <-> sale history ----------
+
+def test_mesh_ranks_who_fits_each_item(c):
+    v = c.get("/api/mesh", headers=H("chef_marco")).json()
+    assert v["own"] is False and v["lines"] > 100
+    assert v["best"]["Fish tacos"]["member"] == "chef_marco" and v["best"]["House burger"]["member"] == "cook_luis"
+    assert {p["name"] for p in v["by_member"]} >= {"Marco", "Rosa", "Luis"}
+
+
+def test_staff_see_only_their_own_mesh(c):
+    v = c.get("/api/mesh", headers=H("fry_rosa")).json()
+    assert v["own"] is True and [p["member"] for p in v["by_member"]] == ["fry_rosa"]
+    assert all(x["member"] == "fry_rosa" for items in v["by_item"].values() for x in items)
+
+
+def test_mesh_is_empty_not_broken_on_a_blank_account(blank):
+    assert blank.get("/api/mesh", headers=H("owner_alex")).json()["lines"] == 0
+
+
+# ---------- Import: register sales -> inventory, through a confirm card ----------
+
+def test_import_sales_updates_inventory_after_confirm(c):
+    d = appmod.db()
+    fish = d.execute("SELECT on_hand FROM materials WHERE material='white fish'").fetchone()[0]
+    rows = [{"item": "fish tacos", "qty": 4, "hour": 19}, {"item": "036000291452", "qty": 2}, {"item": "Mystery soda", "qty": 1}]
+    r = c.post("/api/proposals", json={"kind": "import_sales", "params": {"rows": rows}}, headers=H("chef_marco"))
+    card = r.json()
+    assert r.status_code == 200 and any("white fish" in x for x in card["lines"]) and any("Mystery soda" in x for x in card["lines"])
+    assert d.execute("SELECT on_hand FROM materials WHERE material='white fish'").fetchone()[0] == fish   # nothing yet
+    assert c.post(f"/api/proposals/{card['id']}/confirm", json={}, headers=H("chef_marco")).status_code == 200
+    assert d.execute("SELECT on_hand FROM materials WHERE material='white fish'").fetchone()[0] == fish - 20
+    assert d.execute("SELECT units FROM daily_sales WHERE sku='SALS-02'").fetchone()[0] >= 2
+
+
+def test_import_needs_manager_and_matching_lines(c):
+    rows = [{"item": "Fish tacos", "qty": 1}]
+    assert c.post("/api/proposals", json={"kind": "import_sales", "params": {"rows": rows}}, headers=H("fry_rosa")).status_code == 403
+    r = c.post("/api/proposals", json={"kind": "import_sales", "params": {"rows": [{"item": "nope", "qty": 1}]}}, headers=H("chef_marco"))
+    assert r.status_code == 400
+
+
+def test_sign_in_can_be_switched_off_for_this_pc(tmp_path, monkeypatch):
+    monkeypatch.setattr(appmod, "DB_PATH", str(tmp_path / "human.db"))
+    monkeypatch.setenv("HUMAN_AUTH", "off")
+    appmod.reset(sample=False)
+    try:
+        c = TestClient(appmod.app, raise_server_exceptions=False)
+        assert c.get("/api/auth/status").json()["auth_required"] is False
+        assert c.get("/api/me", headers=H("owner_alex")).json()["level"] == 4
+    finally:
+        monkeypatch.delenv("HUMAN_AUTH")
+        appmod.reset()
+
+
+def test_test_copy_keeps_sign_in_on_with_demo_data_and_a_guest(monkeypatch):
+    monkeypatch.setenv("HUMAN_AUTH", "force")
+    monkeypatch.setenv("HUMAN_GUEST", "Robert")
+    appmod.reset(demo="stew")
+    try:
+        c = TestClient(appmod.app, raise_server_exceptions=False)
+        assert c.get("/api/auth/status").json()["auth_required"] is True
+        assert c.get("/api/me", headers=H("owner_alex")).status_code == 401      # no header sign-in on a shared copy
+        assert len(appmod.STATE["guest_code"]) == 8
+        assert any(m["name"] == "Robert" for m in c.get("/api/members").json())
+    finally:
+        monkeypatch.delenv("HUMAN_AUTH"); monkeypatch.delenv("HUMAN_GUEST")
+        appmod.reset()
+
+
+# ---------- Team chat (HiWR -> Mesh) ----------
+
+def test_team_channel_and_direct_messages(c):
+    assert c.post("/api/chat", json={"to": "team", "text": "Fryer oil changed"}, headers=H("fry_rosa")).status_code == 200
+    team = c.get("/api/chat?to=team", headers=H("chef_marco")).json()
+    assert team["messages"][-1]["name"] == "Rosa" and team["messages"][-1]["mine"] is False
+    assert c.post("/api/chat", json={"to": "chef_marco", "text": "Can I leave at 9?"}, headers=H("fry_rosa")).status_code == 200
+    assert c.get("/api/chat?to=fry_rosa", headers=H("chef_marco")).json()["messages"][-1]["text"] == "Can I leave at 9?"
+    assert c.get("/api/chat?to=fry_rosa", headers=H("stocker_tim")).json()["messages"] == []   # not their thread
+
+
+def test_chat_refuses_card_numbers_and_strangers(c):
+    r = c.post("/api/chat", json={"to": "team", "text": "card 4242 4242 4242 4242"}, headers=H("fry_rosa"))
+    assert r.status_code == 400
+    assert c.post("/api/chat", json={"to": "nobody_here", "text": "hi"}, headers=H("fry_rosa")).status_code == 404
+    c.post("/api/chat", json={"to": "team", "text": "kept"}, headers=H("fry_rosa"))
+    with pytest.raises(Exception):
+        appmod.db().execute("DELETE FROM team_messages")
+
+
+# ---------- Demo scene: prior invoices settle the numbers ----------
+
+def test_scene_settles_costs_from_paid_invoices(blank):
+    assert blank.get("/api/scene", headers=H("owner_alex")).status_code == 404       # demos only
+    blank.post("/api/demo/reset?demo=stew", headers=H("owner_alex"))
+    v = blank.get("/api/scene", headers=H("owner_alex")).json()
+    fish = next(u for u in v["units"] if u["material"] == "white fish")
+    assert fish["after"] == 60 and fish["before"] == 55
+    tacos = next(x for x in v["dishes"] if x["dish"] == "Fish tacos")
+    assert tacos["cost_after"] > tacos["cost_before"] and tacos["margin_after"] < tacos["margin_before"]
+    assert v["anticipated_cents"] == 5500                       # the disputed short stays anticipated, not counted
+    staff = blank.get("/api/scene", headers=H("fry_rosa")).json()
+    assert staff["shows_costs"] is False and "paid_cents" not in staff["invoices"][0] and staff["units"] == []
+
+
+def test_scanned_order_ticket_finds_its_dishes(c):
+    r = c.post("/api/scan/lookup", json={"code": "ORDER POS-1207 table 12: 2 Fish tacos, 1 House burger"}, headers=H("chef_marco")).json()
+    assert {"Fish tacos", "House burger"} <= {m["id"] for m in r["matches"]}

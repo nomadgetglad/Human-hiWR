@@ -1,3 +1,4 @@
 node_modules/
 web/dist/
 __pycache__/
+web/public/ocr/

@@ -36,10 +36,11 @@ export type Member = { id: string; name: string; title: string; language: "en" |
 export type Me = Member & {
   level: number;
   level_name: string;
-  menu: { id: string; label: string }[];
+  menu: { id: string; label: string; children?: string[] }[];
   today: string;
   clock: number;
   sample?: boolean;
+  demo?: string | null;
   auth_required?: boolean;
 };
 export type AuthStatus = { auth_required: boolean; signed_in: string | null; sample: boolean };
