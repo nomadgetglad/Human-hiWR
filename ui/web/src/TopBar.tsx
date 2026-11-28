@@ -55,7 +55,7 @@ function BusinessSwitcher({ me, go }: { me: Me; go: (s: string) => void }) {
   return (
     <DialogTrigger>
       <Button className="brand" aria-label={`${t("Switch business")}: ${t(current.name)}`}>
-        <img src="/icon.svg" alt="" width={36} height={36} />
+        <img src="/icon.svg" alt="" width={44} height={44} />
         <span className="brand-text">
           <span>Human</span>
           <span className="brand-sub">{t(current.name)} ▾</span>
@@ -240,7 +240,7 @@ export function TopBar({ me, go, right }: { me: Me; go: (s: string) => void; rig
         <BusinessSwitcher me={me} go={go} />
       ) : (
         <Button className="brand" onPress={() => go("home")} aria-label={t("Home")}>
-          <img src="/icon.svg" alt="" width={36} height={36} />
+          <img src="/icon.svg" alt="" width={44} height={44} />
           <span>Human</span>
         </Button>
       )}
